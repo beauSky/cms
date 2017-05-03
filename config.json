@@ -1,0 +1,14 @@
+{
+	"listen": {
+		"http": ":80",
+		"https": ":443",
+		"rtmp": ":1935",
+		"query": ":8980"
+	},
+	"log": {
+		"file": "./log",
+		"level": "debug",
+		"size": 524288000,
+		"console": true
+	}
+}
