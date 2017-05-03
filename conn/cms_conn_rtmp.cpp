@@ -46,6 +46,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	misRealTimeStream = false;
 	mllCacheTT = 1000*15;
 	misPublish = false;
+	misPlay = false;
 	mllIdx = 0;
 	misPushFlv = false;
 	mflvTrans = new CFlvTransmission(mrtmp);
@@ -130,8 +131,10 @@ int CConnRtmp::stop(std::string reason)
 		s->mhHash = mHash;
 		s->misPushTask = misPublish;
 		s->misRemove = true;
-		CFlvPool::instance()->push(mHashIdx,s);
-
+		CFlvPool::instance()->push(mHashIdx,s);		
+	}
+	if (misPlay || misPublish)
+	{
 		CTaskMgr::instance()->pullTaskDel(mHash);
 	}
 	if (misPush)
@@ -156,12 +159,10 @@ int CConnRtmp::handleEv(FdEvents *fe)
 	
 	if (fe->events & EventWrite || fe->events & EventWait2Write)
 	{
-		copyEV(fe);
 		return doWrite(fe->events & EventWait2Write);
 	}
 	if (fe->events & EventRead || fe->events & EventWait2Read)
 	{
-		copyEV(fe);
 		return doRead();
 	}
 	if (fe->events & EventJustTick)
@@ -207,20 +208,9 @@ void CConnRtmp::justTick()
 	}
 }
 
-void CConnRtmp::copyEV(FdEvents *fe)
+void CConnRtmp::setEVLoop(struct ev_loop *loop)
 {
-	if (mloop == NULL && fe->loop != NULL)
-	{
-		mloop = fe->loop;
-	}
-	if (mwatcherReadIO == NULL && fe->watcherReadIO != NULL)
-	{
-		mwatcherReadIO = fe->watcherReadIO;
-	}
-	if (mwatcherWriteIO == NULL && fe->watcherWriteIO != NULL)
-	{
-		mwatcherWriteIO= fe->watcherWriteIO;
-	}
+	mloop = loop;
 }
 
 struct ev_loop *CConnRtmp::evLoop()
@@ -230,6 +220,18 @@ struct ev_loop *CConnRtmp::evLoop()
 
 struct ev_io *CConnRtmp::evReadIO()
 {
+	if (mwatcherReadIO == NULL)
+	{
+		mwatcherReadIO = new (ev_io);
+		ev_io_init(mwatcherReadIO, readEV, mrw->fd(), EV_READ);
+		ev_io_start(mloop, mwatcherReadIO);
+		//²âÊÔ
+		/*mwatcherTimer = new(ev_timer);
+		mwatcherTimer->data = (void *)mrw->fd();
+		ev_init(mwatcherTimer,justTickEV);  
+		ev_timer_set(mwatcherTimer,0,10);  
+		ev_timer_start(mloop,mwatcherTimer); */
+	}
 	return mwatcherReadIO;
 }
 
@@ -795,26 +797,28 @@ void CConnRtmp::setPushUrl(std::string url)
 }
 
 int CConnRtmp::setPublishTask()
-{
-	misPublish = true;
+{	
 	if (!CTaskMgr::instance()->pullTaskAdd(mHash,this))
 	{
 		logs->error("***** %s [CConnRtmp::setPublishTask] %s rtmp %s publish task is exist *****",
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 		return CMS_ERROR;
 	}
+	misPublish = true;
+	mrw->setReadBuffer(1024*32);
 	return CMS_OK;
 }
 
 int CConnRtmp::setPlayTask()
-{
-	misPublish = true;
+{	
 	if (!CTaskMgr::instance()->pullTaskAdd(mHash,this))
 	{
 		logs->error("***** %s [CConnRtmp::setPlayTask] %s rtmp %s task is exist *****",
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 		return CMS_ERROR;
 	}
+	misPlay = true;
+	mrw->setReadBuffer(1024*32);
 	return CMS_OK;
 }
 

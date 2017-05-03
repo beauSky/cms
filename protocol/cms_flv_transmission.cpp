@@ -53,7 +53,7 @@ int CFlvTransmission::doMetaData()
 	mllMetaDataIdx = s->mllIndex;
 	ret =  mprotocol->sendMetaData(s);
 	atomicDec(s);
-	logs->debug(">>>>>%s [CFlvTransmission::doTransmission] %s doMetaData send metaData",
+	logs->debug(">>>>>%s [CFlvTransmission::doMetaData] %s doMetaData send metaData",
 		mprotocol->remoteAddr().c_str(),mprotocol->getUrl().c_str());
 	return ret;
 }
@@ -73,13 +73,13 @@ int CFlvTransmission::doFirstVideoAudio(bool isVideo)
 		mchangeFristVideoTimes++;
 
 		mllFirstVideoIdx = s->mllIndex;
-		logs->debug(">>>>>%s [CFlvTransmission::doTransmission] %s doFirstVideoAudio send first video",
+		logs->debug(">>>>>%s [CFlvTransmission::doFirstVideoAudio] %s doFirstVideoAudio send first video",
 			mprotocol->remoteAddr().c_str(),mprotocol->getUrl().c_str());
 	}
 	else
 	{
 		mllFirstAudioIdx = s->mllIndex;
-		logs->debug(">>>>>%s [CFlvTransmission::doTransmission] %s doFirstVideoAudio send first audio",
+		logs->debug(">>>>>%s [CFlvTransmission::doFirstVideoAudio] %s doFirstVideoAudio send first audio",
 			mprotocol->remoteAddr().c_str(),mprotocol->getUrl().c_str());
 	}
 	ret = mprotocol->sendVideoOrAudio(s,0);

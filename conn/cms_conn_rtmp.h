@@ -32,6 +32,8 @@ public:
 	struct ev_loop  *evLoop();
 	struct ev_io    *evReadIO();
 	struct ev_io    *evWriteIO();
+
+	void setEVLoop(struct ev_loop *loop);
 	
 	void setUrl(std::string url);		//拉流或者被推流或者被播放的地址
 	void setPushUrl(std::string url);	//推流到其它服务的推流地址
@@ -47,7 +49,6 @@ private:
 	int  decodeVideoAudio(RtmpMessage *msg);
 	int	 doRead();
 	int	 doWrite(bool isTimeout);
-	void copyEV(FdEvents *fe);
 	void copy2Slice(Slice *s);
 	void makeHash();
 	void makePushHash();
@@ -101,6 +102,7 @@ private:
 	HASH			mpushHash;
 
 	bool			misPublish;
+	bool			misPlay;
 	bool            misPushFlv;
 	bool			misPush;
 

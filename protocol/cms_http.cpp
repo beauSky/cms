@@ -673,7 +673,11 @@ int CHttp::write(const char *data,int &len)
 	}
 	else
 	{
-		mwrBuff->writeBytes(data,len);
+		int ret = mwrBuff->writeBytes(data,len);
+		if (ret == CMS_ERROR)
+		{
+			return CMS_ERROR;
+		}
 		leftSize = mwrBuff->size();
 	}
 	if (leftSize > 0)

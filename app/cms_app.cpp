@@ -19,7 +19,8 @@
 using namespace std;
 
 map<string,string> mapAgrv;
-#define ParamConfig "-c"
+#define ParamConfig		"-c"
+#define ParamDaemon		"-d"
 
 void sample(char *app)
 {
@@ -39,7 +40,7 @@ int daemon()
 	switch(fork()) 
 	{
 	case -1:
-		logs->error("%s(%d)-%s: fork() error: %s",
+		printf("***** %s(%d)-%s: fork() error: %s *****\n",
 			__FILE__, __LINE__, __FUNCTION__, strerror(errno));
 		return -1;
 
@@ -47,14 +48,14 @@ int daemon()
 		break;
 
 	default:
-		logs->debug("Daemon exit\n");
+		printf("Daemon exit\n");
 		exit(0);
 	}
 
 	pid = getpid();
 
 	if (setsid() == -1) {
-		logs->error("%s(%d)-%s: setsid() failed",
+		printf("***** %s(%d)-%s: setsid() failed *****\n",
 			__FILE__, __LINE__, __FUNCTION__);
 		return -1;
 	}
@@ -63,26 +64,26 @@ int daemon()
 
 	fd = open("/dev/null", O_RDWR);
 	if (fd == -1) {
-		logs->error("%s(%d)-%s: open(\"/dev/null\") failed",
+		printf("***** %s(%d)-%s: open(\"/dev/null\") failed *****\n",
 			__FILE__, __LINE__, __FUNCTION__);
 		return -1;
 	}
 
 	if (dup2(fd, STDIN_FILENO) == -1) {
-		logs->error( "%s(%d)-%s: dup2(STDIN) failed",
+		printf( "***** %s(%d)-%s: dup2(STDIN) failed *****\n",
 			__FILE__, __LINE__, __FUNCTION__);
 		return -1;
 	}
 
 	if (dup2(fd, STDOUT_FILENO) == -1) {
-		logs->error("%s(%d)-%s: dup2(STDOUT) failed",
+		printf("***** %s(%d)-%s: dup2(STDOUT) failed *****\n",
 			__FILE__, __LINE__, __FUNCTION__);
 		return -1;
 	}
 
 	if (fd > STDERR_FILENO) {
 		if (close(fd) == -1) {
-			logs->error( "%s(%d)-%s: close() failed",
+			printf( "***** %s(%d)-%s: close() failed ******\n",
 				__FILE__, __LINE__, __FUNCTION__);
 			return -1;
 		}
@@ -104,9 +105,11 @@ void initInstance()
 
 void parseVar(int num,char **argv)
 {
-	for (int i = 0; i < num/2; i++)
+	for (int i = 0; i < num; )
 	{
+		printf("param: %s %s\n",argv[i],argv[i+1]);
 		mapAgrv.insert(make_pair(argv[i],argv[i+1]));
+		i += 2;
 	}
 }
 
@@ -143,19 +146,24 @@ void setRlimit()
 
 int main(int argc,char *argv[])
 {	
-	inorgSignal();	
 	if (argc % 2 != 1)
 	{
 		printf("***** main argc is error,should argc %% 2 == 1*****\n");
 		return 0;
 	}
 	parseVar(argc-1,argv+1);
+	string daemons = getVar(ParamDaemon);
+	if (daemons != "debug")
+	{
+		daemon();
+	}
 	string config = getVar(ParamConfig);
 	if (config.empty())
 	{
 		sample(argv[0]);
 		return 0;
 	}
+	inorgSignal();	
 	if (!CConfig::instance()->init(config.c_str()))
 	{
 		return 0;

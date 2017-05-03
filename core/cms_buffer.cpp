@@ -97,11 +97,12 @@ int   CBufferReader::grow(int n)
 		if (nread == 0)
 		{
 			break;
-		}
+		}		
 		needRead -= nread;
 		me += nread;
 		outread += nread;
 		nread = 0;
+		break;
 	}
 	//³¢ÊÔ¶à¶ÁÊý¾Ý
 // 	if (mbufferSize-me > 0)

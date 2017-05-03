@@ -15,6 +15,8 @@ public:
 	virtual char  *errnoCode() = 0;
 	virtual int   errnos() = 0;
 	virtual int   setNodelay(int on) = 0; 
+	virtual int	  setReadBuffer(int size) = 0; 
+	virtual int	  setWriteBuffer(int size) = 0; 
 };
 
 #endif

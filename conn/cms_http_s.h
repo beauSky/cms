@@ -24,6 +24,9 @@ public:
 	struct ev_loop  *evLoop();
 	struct ev_io    *evReadIO();
 	struct ev_io    *evWriteIO();
+
+	void setEVLoop(struct ev_loop *loop);
+
 	int doDecode();
 	int doTransmission();
 	int sendBefore(const char *data,int len);
@@ -33,7 +36,6 @@ public:
 private:
 	int  handle();
 	int	 handleFlv(int &ret);
-	void copyEV(FdEvents *fe);
 	void makeHash();
 	
 	struct ev_loop	*mloop;			//全局不属于本类

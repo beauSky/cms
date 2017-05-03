@@ -77,7 +77,6 @@ int CHttpServer::doit()
 
 int CHttpServer::handleEv(FdEvents *fe)
 {
-	copyEV(fe);
 	if (fe->events & EventWrite || fe->events & EventWait2Write)
 	{
 		return doWrite(fe->events & EventWait2Write);
@@ -94,23 +93,6 @@ int CHttpServer::handleEv(FdEvents *fe)
 	}
 	return CMS_OK;
 }
-
-void CHttpServer::copyEV(FdEvents *fe)
-{
-	if (mloop == NULL && fe->loop != NULL)
-	{
-		mloop = fe->loop;
-	}
-	if (mwatcherReadIO == NULL && fe->watcherReadIO != NULL)
-	{
-		mwatcherReadIO = fe->watcherReadIO;
-	}
-	if (mwatcherWriteIO == NULL && fe->watcherWriteIO != NULL)
-	{
-		mwatcherWriteIO= fe->watcherWriteIO;
-	}
-}
-
 
 int CHttpServer::stop(std::string reason)
 {
@@ -132,6 +114,11 @@ std::string CHttpServer::getRemoteIP()
 	return mremoteIP;
 }
 
+void CHttpServer::setEVLoop(struct ev_loop *loop)
+{
+	mloop = loop;
+}
+
 struct ev_loop *CHttpServer::evLoop()
 {
 	return mloop;
@@ -139,6 +126,12 @@ struct ev_loop *CHttpServer::evLoop()
 
 struct ev_io *CHttpServer::evReadIO()
 {
+	if (mwatcherReadIO == NULL)
+	{
+		mwatcherReadIO = new (ev_io);
+		ev_io_init(mwatcherReadIO, readEV, mrw->fd(), EV_READ);
+		ev_io_start(mloop, mwatcherReadIO);
+	}
 	return mwatcherReadIO;
 }
 

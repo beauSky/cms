@@ -40,6 +40,8 @@ public:
 	char  *errnoCode();
 	int   errnos();
 	int   setNodelay(int on);
+	int	  setReadBuffer(int size);
+	int	  setWriteBuffer(int size);
 private:
 	int mfd;
 	struct sockaddr_in mto;

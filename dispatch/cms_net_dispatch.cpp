@@ -44,8 +44,7 @@ void CNetDispatch::freeInstance()
 }
 
 void CNetDispatch::addOneDispatch(int fd, CDispatch *ds)
-{
-	printf("addOneDispatch fd=%d\n",fd);
+{	
 	VDSPtr ptr = NULL;
 	mdispatchLock.WLock();
 	int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
@@ -221,9 +220,8 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,hs);
 
-				struct ev_io *sockIO = new (ev_io);
-				ev_io_init(sockIO, readEV, cfd, EV_READ);
-				ev_io_start(CConnMgrInterface::instance()->loop(), sockIO);
+				hs->setEVLoop(CConnMgrInterface::instance()->loop());
+				hs->evReadIO();
 			}
 			else
 			{
@@ -237,9 +235,8 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,hs);
 
-				struct ev_io *sockIO = new (ev_io);
-				ev_io_init(sockIO, readEV, cfd, EV_READ);
-				ev_io_start(CConnMgrInterface::instance()->loop(), sockIO);
+				hs->setEVLoop(CConnMgrInterface::instance()->loop());
+				hs->evReadIO();
 			}
 			else
 			{
@@ -253,9 +250,8 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,rtmp);
 
-				struct ev_io *sockIO = new (ev_io);
-				ev_io_init(sockIO, readEV, cfd, EV_READ);
-				ev_io_start(CConnMgrInterface::instance()->loop(), sockIO);
+				rtmp->setEVLoop(CConnMgrInterface::instance()->loop());
+				rtmp->evReadIO();
 			}
 			else
 			{

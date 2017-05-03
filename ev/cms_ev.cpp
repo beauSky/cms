@@ -33,6 +33,7 @@ cms_timer *mallcoCmsTimer()
 	cms_timer * ct = new(cms_timer);
 	ct->only = 0;
 	atomicInc(ct); //新创建，计数器加1
+	return ct;
 }
 
 void freeCmsTimer(cms_timer *ct)

@@ -130,10 +130,11 @@ void CLog::thread()
 				mfiseSize += logInfo->len;
 				fwrite(logInfo->log,1,logInfo->len,mfp);
 				fwrite("\n",1,1,mfp);
+				fflush(mfp);
 				if (mconsole)
 				{
 					printf("%s\n",logInfo->log);
-				}
+				}				
 			}
 			if (logInfo->log)
 			{

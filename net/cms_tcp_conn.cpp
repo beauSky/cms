@@ -147,7 +147,7 @@ int   TCPConn::write(char *srcBuf,int len,int &nwrite)
 		}
 		else
 		{
-			logs->info("##### TCPConn write addr %s fail,fd=%d #####",maddr.c_str(),mfd);
+			//logs->info("##### TCPConn write addr %s fail,fd=%d #####",maddr.c_str(),mfd);
 			merrcode = errno;
 		}
 		return CMS_ERROR;
@@ -170,6 +170,16 @@ int  TCPConn::errnos()
 int TCPConn::setNodelay(int on)
 {
 	return setsockopt(mfd, IPPROTO_TCP, TCP_NODELAY, (void *)&on, sizeof(on));
+}
+
+int	TCPConn::setReadBuffer(int size)
+{
+	return setsockopt(mfd, IPPROTO_TCP, SO_RCVBUF, (void *)&size, sizeof(size));
+}
+
+int	TCPConn::setWriteBuffer(int size)
+{
+	return setsockopt(mfd, IPPROTO_TCP, SO_SNDBUF, (void *)&size, sizeof(size));
 }
 
 int   TCPConn::remoteAddr(char *addr,int len)
@@ -280,7 +290,7 @@ int  TCPListener::listen(char* addr,ConnType listenType)
 	serv_addr.sin_addr.s_addr = ip;
 	if (bind(mfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{
-		logs->error("*** TCPListener listen bind socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
+		logs->error("*** TCPListener listen bind %s socket is error,errno=%d,errstr=%s *****",mlistenAddr.c_str(),errno,strerror(errno));
 		::close(mfd);
 		mfd = -1;
 		return CMS_ERROR;

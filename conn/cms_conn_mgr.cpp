@@ -239,21 +239,13 @@ Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUr
 		{
 			CConnMgrInterface::instance()->addOneConn(tcp->fd(),rtmp);
 
-			struct ev_io *sockIOw = new (ev_io);
-			struct ev_io *sockIOr = new (ev_io);
-			//ev_io_init(sockIO, writeEV, tcp->fd(), EV_READ|EV_WRITE);
-			ev_io_init(sockIOw, writeEV, tcp->fd(), EV_WRITE);
-			ev_io_init(sockIOr, writeEV, tcp->fd(), EV_READ);
-			ev_io_start(mloop, sockIOw);
-			ev_io_start(mloop, sockIOr);
+			rtmp->setEVLoop(mloop);
+			rtmp->evReadIO();
+			rtmp->evWriteIO();
 			conn = rtmp;
 			if (tcp->connect() == CMS_ERROR)
 			{
 				CConnMgrInterface::instance()->delOneConn(tcp->fd());
-				ev_io_stop(mloop,sockIOw);
-				ev_io_stop(mloop,sockIOr);
-				delete sockIOw;
-				delete sockIOr;
 				delete rtmp;
 				conn = NULL;
 			}
