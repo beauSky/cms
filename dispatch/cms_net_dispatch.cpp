@@ -203,7 +203,6 @@ bool CNetDispatch::nonblocking(int fd)
 
 void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int fd)
 {
-	logs->debug("#### dispatchAccept enter ###");
 	int cfd = CMS_ERROR;
 	ConnType listenType = TypeNetNone;
 	mdispatchListenLock.RLock();
@@ -279,7 +278,6 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			}
 		}
 	}
-	logs->debug("#### dispatchAccept leave ###");
 }
 
 
