@@ -52,12 +52,14 @@ public:
 	void		setStatus(int statusCode,std::string statsu);
 	void		setRemoteAddr(std::string addr);
 	bool		parseHeader(const char *header,int len);
+	std::string getResponse();
 private:
 	std::string		moriUrl;
 	std::string		mremoteAddr;
 	std::string		mstatus;		//"200 OK"
 	int				mstatusCode;	//200
 	std::string		mproto;			//"HTTP/1.0"
+	std::string     moriRsp;
 	std::map<std::string,std::string> mmapHeader;
 };
 
@@ -72,7 +74,8 @@ public:
 	bool        run();
 	int			want2Read();
 	int			want2Write(bool isTimeout);
-	int         read(char **data,int &len);			//数据保存在*data中，读完之后要马上处理，没处理前不能再次read，否则可能出现不可预测的错误
+	int         read(char **data,int &len);			//数据保存在*data中，读取指定长度的数据len，如果没有足够数据则返回0
+													//，读完之后要马上处理，没处理前不能再次read，否则可能出现不可预测的错误
 	int         write(const char *data,int &len);
 	bool		setUrl(std::string url);
 	void		setRefer(std::string refer);
@@ -86,8 +89,10 @@ public:
 	std::string remoteAddr();
 	std::string getUrl();
 	void syncIO();
+	void setChunked();
 private:
 	void		doWriteTimeout();
+	int 		readChunkedRN();		
 	//tls 的东西
 	bool			misTls;
 	CSSL			*mssl;
@@ -98,6 +103,16 @@ private:
 	bool			misWriteHeader;
 	int				mheaderEnd;
 	std::string     mstrHeader;
+
+	bool			misChunked;
+	int64			mchunkedLen;
+	bool			misReadChunkedLen;
+	std::string		mchunkBytesRN;
+	int				mchunkedReadrRN;
+
+	int				msendRequestLen;
+	bool			misReadReuqest;
+	std::string		mstrRequestHeader;
 
 	Conn			*msuper;
 	bool			misClient;
@@ -110,6 +125,7 @@ private:
 	CBufferReader	*mrdBuff;
 	CBufferWriter	*mwrBuff;
 	CReaderWriter	*mrw;
+	CByteReaderWriter *mbyteReadWrite;
 
 	cms_timer		*mcmsReadTimeout;
 	cms_timer		*mcmsWriteTimeout;

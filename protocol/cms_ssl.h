@@ -12,6 +12,8 @@ public:
 	bool	run();
 	int		read(char **data,int &len);
 	int		write(const char *data,int &len);
+	int   	peek(char **data,int &len);
+	void	skip(int len);
 	int		bufferWriteSize();
 	bool    isHandShake();
 	int		flush();

@@ -84,13 +84,14 @@ bool CTaskMgr::run()
 	return true;
 }
 
-void CTaskMgr::createTask(std::string pullUrl,std::string pushUrl,std::string refer,
-				   int createAct,bool isHotPush,bool isPush2Cdn)
+void CTaskMgr::createTask(std::string pullUrl,std::string pushUrl,std::string oriUrl,
+						  std::string refer,int createAct,bool isHotPush,bool isPush2Cdn)
 {
 	CreateTaskPacket * ctp = new CreateTaskPacket;
 	ctp->createAct = createAct;
 	ctp->pullUrl = pullUrl;
 	ctp->pushUrl = pushUrl;
+	ctp->oriUrl = oriUrl;
 	ctp->refer = refer;
 	ctp->isHotPush = isHotPush;
 	ctp->isPush2Cdn = isPush2Cdn;
@@ -125,7 +126,18 @@ void CTaskMgr::pullCreateTask(CreateTaskPacket *ctp)
 	LinkUrl linUrl;
 	if (parseUrl(ctp->pullUrl,linUrl))
 	{
-		CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"",TypeRtmp,RtmpClient2Play);
+		if (linUrl.protocol == PROTOCOL_RTMP)
+		{
+			CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"","",ctp->refer,TypeRtmp,RtmpClient2Play);
+		}
+		else if (linUrl.protocol == PROTOCOL_HTTP)
+		{
+			CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"",ctp->oriUrl,ctp->refer,TypeHttp,RtmpTypeNone);
+		}
+		else if (linUrl.protocol == PROTOCOL_HTTPS)
+		{
+			CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"",ctp->oriUrl,ctp->refer,TypeHttps,RtmpTypeNone);
+		}
 	}
 	else
 	{
@@ -139,7 +151,7 @@ void CTaskMgr::pushCreateTask(CreateTaskPacket *ctp)
 	LinkUrl linUrl;
 	if (parseUrl(ctp->pushUrl,linUrl))
 	{
-		CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,ctp->pushUrl,TypeRtmp,RtmpClient2Publish);
+		CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,ctp->pushUrl,"",ctp->refer,TypeRtmp,RtmpClient2Publish);
 	}
 	else
 	{

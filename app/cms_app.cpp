@@ -7,6 +7,7 @@
 #include <app/cms_server.h>
 #include <flvPool/cms_flv_pool.h>
 #include <taskmgr/cms_task_mgr.h>
+#include <static/cms_static.h>
 #include <map>
 #include <string>
 #include <signal.h>
@@ -101,6 +102,7 @@ void initInstance()
 	CShmMgr::instance();
 	CServer::instance();
 	CTaskMgr::instance();
+	CStatic::instance();
 }
 
 void parseVar(int num,char **argv)
@@ -173,6 +175,18 @@ int main(int argc,char *argv[])
 	setRlimit();
 	//必须先初始化日志，否则会崩溃
 	initInstance();	
+	char *pPos = strrchr(argv[0],'/');
+	if (pPos)
+	{
+		++pPos;
+		CStatic::instance()->setAppName(pPos);
+	}
+	if (!CStatic::instance()->run())
+	{
+		logs->error("*** CStatic::instance()->run() fail ***");
+		cmsSleep(1000*3);
+		return 0;
+	}
 	if (!CFlvPool::instance()->run())
 	{
 		logs->error("*** CFlvPool::instance()->run() fail ***");

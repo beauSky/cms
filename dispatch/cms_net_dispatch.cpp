@@ -243,6 +243,21 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 				delete hs;
 			}
 		}
+		else if (listenType == TypeQuery)
+		{
+			CHttpServer *hs = new CHttpServer(tcp,false);
+			if (hs->doit() != CMS_ERROR)
+			{
+				CConnMgrInterface::instance()->addOneConn(cfd,hs);
+
+				hs->setEVLoop(CConnMgrInterface::instance()->loop());
+				hs->evReadIO();
+			}
+			else
+			{
+				delete hs;
+			}
+		}
 		else if (listenType == TypeRtmp)
 		{
 			CConnRtmp *rtmp = new CConnRtmp(RtmpServerBPlayOrPublish,tcp,"","");

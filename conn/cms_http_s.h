@@ -24,10 +24,12 @@ public:
 	struct ev_loop  *evLoop();
 	struct ev_io    *evReadIO();
 	struct ev_io    *evWriteIO();
+	void down8upBytes();
 
 	void setEVLoop(struct ev_loop *loop);
 
 	int doDecode();
+	int doReadData(){return CMS_OK;};
 	int doTransmission();
 	int sendBefore(const char *data,int len);
 
@@ -36,7 +38,9 @@ public:
 private:
 	int  handle();
 	int	 handleFlv(int &ret);
+	int handleQuery(int &ret);
 	void makeHash();
+	void tryCreateTask();
 	
 	struct ev_loop	*mloop;			//全局不属于本类
 	struct ev_io	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
@@ -45,12 +49,15 @@ private:
 	bool			misDecodeHeader;
 	CReaderWriter	*mrw;
 	std::string		murl;
+	std::string		mreferer;
 	std::string		mremoteAddr;
 	std::string		mremoteIP;
 	std::string		mHost;
 	HASH			mHash;
 	uint32          mHashIdx;
 	std::string		mstrHash;
+	bool			misFlvPlay;
+	bool			misFlvRequest;
 
 	int64           mllIdx;
 	CFlvTransmission *mflvTrans;
@@ -65,5 +72,7 @@ private:
 	std::string		msecWebSocketProtocol;
 
 	BinaryWriter	*mbinaryWriter;
+
+	unsigned long  mspeedTick;
 };
 #endif

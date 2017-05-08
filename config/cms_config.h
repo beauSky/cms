@@ -32,6 +32,26 @@ private:
 	LogLevel	mlevel;
 };
 
+class CertKey
+{
+public:
+	CertKey(char *cert,char *key,char *dhparam,char *ciper);
+	CertKey();
+	~CertKey();
+
+	char *certificateChain();
+	char *privateKey();
+	char *cipherPrefs();
+	char *dhparam();
+	bool isOpenSSL();
+private:
+	bool misOpen;
+	char *mcert;
+	char *mkey;
+	char *mcipher;
+	char *mdhparam;
+};
+
 class CConfig
 {
 public:
@@ -44,6 +64,7 @@ public:
 	CAddr	*addrHttps();
 	CAddr	*addrRtmp();
 	CAddr	*addrQuery();
+	CertKey *certKey();
 	Clog	*clog();
 private:
 	static CConfig *minstance;
@@ -54,5 +75,7 @@ private:
 	CAddr	*mQuery;
 
 	Clog	*mlog;
+
+	CertKey *mcertKey;
 };
 #endif

@@ -112,6 +112,7 @@ void CLog::thread()
 			{
 				if (day != logInfo->day)
 				{
+					midx = 0;
 					fclose(mfp);
 					memset(szTime,0,sizeof(szTime));
 					getDateTime(szTime);

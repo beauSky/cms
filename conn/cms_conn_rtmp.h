@@ -26,8 +26,10 @@ public:
 	std::string getPushUrl();
 	std::string getRemoteIP();
 	int doDecode(){return 0;};
+	int doReadData(){return CMS_OK;};
 	int doTransmission();
 	int sendBefore(const char *data,int len){return 0;};
+	void down8upBytes();
 
 	struct ev_loop  *evLoop();
 	struct ev_io    *evReadIO();
@@ -109,5 +111,6 @@ private:
 	int64           mllIdx;
 
 	CFlvTransmission *mflvTrans;
+	unsigned long  mspeedTick;
 };
 #endif

@@ -4,6 +4,8 @@
 #include <ev/cms_ev.h>
 #include <conn/cms_conn_var.h>
 #include <common/cms_utility.h>
+#include <taskmgr/cms_task_mgr.h>
+#include <static/cms_static.h>
 
 
 CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
@@ -34,6 +36,10 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	misWebSocket = false;
 	mflvTrans = new CFlvTransmission(mhttp);
 	mbinaryWriter = NULL;
+	misFlvPlay = false;
+	misFlvRequest = false;
+
+	mspeedTick = 0;
 }
 
 CHttpServer::~CHttpServer()
@@ -100,6 +106,11 @@ int CHttpServer::stop(std::string reason)
 	{
 		logs->error("%s [CHttpServer::stop] http %s stop with reason: %s ***",
 			mremoteAddr.c_str(),murl.c_str(),reason.c_str());
+	}
+	if (misFlvPlay)
+	{
+		down8upBytes();
+		makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
 	}
 	return CMS_OK;
 }
@@ -242,6 +253,13 @@ int CHttpServer::handle()
 		{
 			break;
 		}
+		if (handleQuery(ret) != 0)
+		{
+			break;
+		}
+		logs->warn("***** %s [CHttpServer::handleFlv] http %s unknow request *****",
+			mremoteAddr.c_str(),murl.c_str());
+		ret = CMS_ERROR;
 	} while (0);
 	return ret;
 }
@@ -274,8 +292,11 @@ int	CHttpServer::handleFlv(int &ret)
 				ret = CMS_ERROR;
 				return CMS_ERROR;
 			}
-		}	
+		}
+		misFlvRequest = true;
+		mreferer = mhttp->httpRequest()->getHeader(HTTP_HEADER_REQ_REFERER);
 		makeHash();
+		tryCreateTask();
 
 		//succ
 		if (misWebSocket)
@@ -293,7 +314,7 @@ int	CHttpServer::handleFlv(int &ret)
 		}
 		else
 		{
-			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"200 OK");
+			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"video/x-flv");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CACHE_CONTROL,"no-cache");
@@ -338,9 +359,67 @@ int	CHttpServer::handleFlv(int &ret)
 	return 0;
 }
 
+int CHttpServer::handleQuery(int &ret)
+{
+	if (murl.find("/query/info") != string::npos)
+	{
+		std::string strDump = CStatic::instance()->dump();
+		char szLength[20] = {0};
+		snprintf(szLength,sizeof(szLength),"%lu",strDump.length());
+		//succ
+		if (misWebSocket)
+		{
+			mhttp->httpResponse()->setStatus(HTTP_CODE_101,"Switching Protocols");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_UPGRADE,"websocket");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"Upgrade");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_ACCESS_CONTROL_ALLOW_ORIGIN,"*");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SEC_WEBSOCKET_ACCEPT,msecWebSocketAccept);
+			if (!msecWebSocketProtocol.empty())
+			{
+				mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SEC_WEBSOCKET_PROTOCOL,msecWebSocketProtocol);
+			}
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"text/json; charset=UTF-8");
+		}
+		else
+		{
+			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"text/json; charset=UTF-8");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"close");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
+		}
+		std::string strRspHeader = mhttp->httpResponse()->readResponse();
+		strRspHeader += strDump;
+		ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+		if (ret < 0)
+		{
+			logs->error("*** %s [CHttpServer::handleFlv] http %s send header fail ***",
+				mremoteAddr.c_str(),murl.c_str());
+			ret = CMS_ERROR;
+			return CMS_ERROR;
+		}
+		ret = CMS_ERROR;
+		return 1;
+	}
+	return 0;
+}
+
 int CHttpServer::doTransmission()
 {
-	return mflvTrans->doTransmission();
+	int ret = 1;
+	if (misFlvRequest)
+	{
+		ret = mflvTrans->doTransmission();
+		if (ret == 1 && !misFlvPlay)
+		{
+			misFlvPlay = true;
+			makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
+			down8upBytes();
+		}		
+	}
+	return ret;
 }
 
 int CHttpServer::sendBefore(const char *data,int len)
@@ -398,6 +477,7 @@ int CHttpServer::sendBefore(const char *data,int len)
 			return CMS_ERROR;
 		}
 		mbinaryWriter->reset();
+		return CMS_OK;
 	}
 	return mhttp->write(data,len);
 }
@@ -414,4 +494,34 @@ void CHttpServer::makeHash()
 	logs->debug("%s [CHttpServer::makeHash] hash url %s,hash=%s",
 		mremoteAddr.c_str(),hashUrl.c_str(),mstrHash.c_str());
 	mflvTrans->setHash(mHashIdx,mHash);
+}
+
+void CHttpServer::tryCreateTask()
+{
+	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
+	{
+		CTaskMgr::instance()->createTask(murl,"",murl,mreferer,CREATE_ACT_PULL,false,false);
+	}
+}
+
+void CHttpServer::down8upBytes()
+{
+	if (misFlvRequest)
+	{
+		unsigned long tt = getTickCount();
+		if (tt - mspeedTick > 1000)
+		{
+			mspeedTick = tt;
+			int32 bytes = mrdBuff->readBytesNum();
+			if (bytes > 0)
+			{
+				makeOneTaskDownload(mHash,bytes,false);
+			}
+			bytes = mwrBuff->writeBytesNum();
+			if (bytes > 0)
+			{
+				makeOneTaskupload(mHash,bytes,PACKET_CONN_DATA);
+			}
+		}
+	}
 }

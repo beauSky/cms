@@ -2,6 +2,12 @@
 #define __CMS_COMMON_URL_H__
 #include <string>
 
+#define PROTOCOL_HTTP	"http"
+#define PROTOCOL_HTTPS	"https"
+#define PROTOCOL_RTMP	"rtmp"
+#define PROTOCOL_WS		"ws"
+#define PROTOCOL_WSS	"wss"
+
 typedef struct _LinkUrl
 {
 	std::string protocol;

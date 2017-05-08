@@ -17,15 +17,16 @@ class CConnMgr:CDispatch
 public:
 	bool run();
 	void stop();
+	void thread();
 	static void *routinue(void *param);	
+
 	void addOneConn(int fd,Conn *c);
 	void delOneConn(int fd);
 	void  pushEv(int fd,int events,struct ev_loop *loop,struct ev_io *watcherRead,struct ev_io *watcherWrite,struct ev_timer *watcherTimeout);
 	void  pushEv(int fd,int events,cms_timer *ct);
 private:	
 	void dispatchEv(FdEvents *fe);
-	bool popEv(FdEvents **fe);
-	void thread();
+	bool popEv(FdEvents **fe);	
 	map<int,Conn *> mfdConn;
 	CRWlock mfdConnLock;
 
@@ -51,7 +52,8 @@ public:
 	void addOneConn(int fd,Conn *c);
 	void delOneConn(int fd);
 	struct ev_loop *loop();
-	Conn *createConn(char *addr,string pullUrl,std::string pushUrl,ConnType connectType,RtmpType rtmpType);
+	Conn *createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
+		,ConnType connectType,RtmpType rtmpType);
 private:
 	static CConnMgrInterface *minstance;
 	CConnMgr *mconnMgrArray[NUM_OF_THE_CONN_MGR];

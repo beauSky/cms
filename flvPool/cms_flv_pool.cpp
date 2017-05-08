@@ -4,6 +4,7 @@
 #include <log/cms_log.h>
 #include <protocol/cms_flv.h>
 #include <common/cms_char_int.h>
+#include <static/cms_static_common.h>
 using namespace std;
 
 #define MapHashStreamIter map<HASH,StreamSlice *>::iterator
@@ -1116,6 +1117,7 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			atomicDec(ss->mmetaDataSlice);
 		}
 		delete s;
+		delete ss;
 	}
 	else
 	{
@@ -1290,7 +1292,8 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 						}
 					}
 					if (!ss->msliceTTKK.empty() && ss->msliceTTKK.at(0)->mllIndex == st->mllIndex)
-					{
+					{						
+						delete ss->msliceTTKK.at(0);
 						ss->msliceTTKK.erase(ss->msliceTTKK.begin());
 					}
 					//Ê±¼ä´Á¼ÇÂ¼
@@ -1318,10 +1321,12 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			if (ss->mllMemSize > ss->mllLastMemSize+100*1024)
 			{
 				ss->mllLastMemSize = ss->mllMemSize;
+				makeOneTaskMem(s->mhHash,ss->mllLastMemSize);
 			}
 			else if (ss->mllMemSize+100*1024 < ss->mllLastMemSize)
 			{
 				ss->mllLastMemSize = ss->mllMemSize;
+				makeOneTaskMem(s->mhHash,ss->mllLastMemSize);
 			}
 			int64 tt = getTimeUnix();
 			if (tt - ss->mllMemSizeTick > 10)

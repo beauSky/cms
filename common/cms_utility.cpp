@@ -466,11 +466,15 @@ std::string readMajorUrl(std::string strUrl)
 	{
 		if (isLegalIp(linkUrl.host.c_str()))
 		{
-			if (linkUrl.protocol == "http")
+			if (linkUrl.protocol == PROTOCOL_HTTP)
 			{
 				strUrl = "http://";
 			}
-			else if (linkUrl.protocol == "rtmp")
+			if (linkUrl.protocol == PROTOCOL_HTTPS)
+			{
+				strUrl = "https://";
+			}
+			else if (linkUrl.protocol == PROTOCOL_RTMP)
 			{
 				strUrl = "rtmp://";
 			}

@@ -3,6 +3,7 @@
 #include <common/cms_utility.h>
 #include <dispatch/cms_net_dispatch.h>
 #include <ev/cms_ev.h>
+#include <conn/cms_http_c.h>
 #include <assert.h>
 
 
@@ -216,7 +217,8 @@ struct ev_loop *CConnMgrInterface::loop()
 	return mloop;
 }
 
-Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUrl,ConnType connectType,RtmpType rtmpType)
+Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
+									,ConnType connectType,RtmpType rtmpType)
 {
 	Conn *conn = NULL;
 	TCPConn *tcp = new TCPConn();
@@ -224,13 +226,28 @@ Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUr
 	{
 		return NULL;
 	}
-	if (connectType == TypeHttp)
+	if (connectType == TypeHttp || connectType == TypeHttps)
 	{
+		ChttpClient *http = new ChttpClient(tcp,pullUrl,oriUrl,strReferer,connectType == TypeHttp?false:true);
+		if (http->doit() != CMS_ERROR)
+		{
+			CConnMgrInterface::instance()->addOneConn(tcp->fd(),http);
 
-	}
-	else if (connectType == TypeHttps)
-	{
-
+			http->setEVLoop(mloop);
+			http->evReadIO();
+			http->evWriteIO();
+			conn = http;
+			if (tcp->connect() == CMS_ERROR)
+			{
+				CConnMgrInterface::instance()->delOneConn(tcp->fd());
+				delete http;
+				conn = NULL;
+			}
+		}
+		else
+		{
+			delete http;
+		}
 	}
 	else if (connectType == TypeRtmp)
 	{

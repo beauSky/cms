@@ -19,9 +19,13 @@ public:
 	virtual struct ev_loop  *evLoop() = 0;
 	virtual struct ev_io    *evReadIO() = 0;
 	virtual struct ev_io    *evWriteIO() = 0;
+
+	virtual void down8upBytes() = 0;
+
 	//http สนำร
 	virtual int doDecode() = 0;
-	virtual int doTransmission() = 0;
+	virtual int doReadData() = 0; //http client
+	virtual int doTransmission() = 0; //http server
 	virtual int sendBefore(const char *data,int len) = 0;
 };
 

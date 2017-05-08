@@ -46,7 +46,8 @@ bool	CServer::listenAll()
 		logs->error("***** [CServer::listenAll] listen http fail *****");
 		return false;
 	}
-	if (mHttps->listen(CConfig::instance()->addrHttps()->addr(),TypeHttps) == CMS_ERROR)
+	if (CConfig::instance()->certKey()->isOpenSSL() &&
+		mHttps->listen(CConfig::instance()->addrHttps()->addr(),TypeHttps) == CMS_ERROR)
 	{
 		logs->error("***** [CServer::listenAll] listen https fail *****");
 		return false;
@@ -62,7 +63,10 @@ bool	CServer::listenAll()
 		return false;
 	}
 	CNetDispatch::instance()->addOneListenDispatch(mHttp->fd(),mHttp);
-	CNetDispatch::instance()->addOneListenDispatch(mHttps->fd(),mHttps);
+	if (CConfig::instance()->certKey()->isOpenSSL())
+	{
+		CNetDispatch::instance()->addOneListenDispatch(mHttps->fd(),mHttps);
+	}	
 	CNetDispatch::instance()->addOneListenDispatch(mRtmp->fd(),mRtmp);
 	CNetDispatch::instance()->addOneListenDispatch(mQuery->fd(),mQuery);
 	return true;

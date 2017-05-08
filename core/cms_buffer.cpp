@@ -13,6 +13,7 @@ CBufferReader::CBufferReader(CReaderWriter *rd,int size)
 	mb = me = 0;
 	mrd = rd;
 	ms2nConn = NULL;
+	mtotalReadBytes = 0;
 }
 
 CBufferReader::CBufferReader(s2n_connection *s2nConn,int size)
@@ -22,6 +23,7 @@ CBufferReader::CBufferReader(s2n_connection *s2nConn,int size)
 	mb = me = 0;
 	mrd = NULL;
 	ms2nConn = s2nConn;
+	mtotalReadBytes = 0;
 }
 
 CBufferReader::~CBufferReader()
@@ -97,11 +99,12 @@ int   CBufferReader::grow(int n)
 		if (nread == 0)
 		{
 			break;
-		}		
+		}
+		mtotalReadBytes += nread;
 		needRead -= nread;
 		me += nread;
 		outread += nread;
-		nread = 0;
+		nread = 0;		
 		break;
 	}
 	//尝试多读数据
@@ -216,6 +219,13 @@ void  CBufferReader::close()
 	mrd->close();
 }
 
+int32 CBufferReader::readBytesNum()
+{
+	int32 bytes = mtotalReadBytes;
+	mtotalReadBytes = 0;
+	return bytes;
+}
+
 CBufferWriter::CBufferWriter(CReaderWriter *rd,int size)
 {
 	mbufferSize = size;
@@ -223,6 +233,7 @@ CBufferWriter::CBufferWriter(CReaderWriter *rd,int size)
 	mb = me = 0;
 	mrd = rd;
 	ms2nConn = NULL;
+	mtotalWriteBytes = 0;
 }
 
 CBufferWriter::CBufferWriter(s2n_connection *s2nConn,int size)
@@ -232,6 +243,7 @@ CBufferWriter::CBufferWriter(s2n_connection *s2nConn,int size)
 	mb = me = 0;
 	mrd = NULL;
 	ms2nConn = s2nConn;
+	mtotalWriteBytes = 0;
 }
 
 CBufferWriter::~CBufferWriter()
@@ -244,6 +256,7 @@ CBufferWriter::~CBufferWriter()
 
 int CBufferWriter::writeBytes(const char *data,int n)
 {
+	mtotalWriteBytes += n;
 	int nn = n;
 	int ret = 0;
 	int nwrite = 0;
@@ -464,3 +477,114 @@ void CBufferWriter::close()
 {
 	mrd->close();
 }
+
+int32 CBufferWriter::writeBytesNum()
+{
+	int32 bytes = mtotalWriteBytes;
+	mtotalWriteBytes = 0;
+	return bytes;
+}
+
+CByteReaderWriter::CByteReaderWriter(int size)
+{
+	mbufferSize = size;
+	mbuffer = (char *)malloc(size);
+	mb = me = 0;
+}
+
+CByteReaderWriter::~CByteReaderWriter()
+{
+	free(mbuffer);
+	mbuffer = NULL;
+	mb = me = 0;
+	mbufferSize = 0;
+}
+
+int CByteReaderWriter::writeBytes(const char *data,int n)
+{
+	const char *p = data;
+	int nuseBuffer = me-mb;	
+	if (nuseBuffer == 0)
+	{
+		mb = me = 0;
+	}
+	int nfreeBuffer = mbufferSize-nuseBuffer;
+	if (mbufferSize < n || nfreeBuffer < n)//需要扩展内存
+	{
+		mbufferSize += ((n / 1024 + 1) * 1024);
+		resize();
+	}
+	int ncanUserBuffer = mbufferSize-me;	
+	if (ncanUserBuffer < n)
+	{
+		memmove(mbuffer,mbuffer+mb,me-mb);
+		mb = 0;
+		me = nuseBuffer;
+		ncanUserBuffer = mbufferSize-me;
+	}
+	assert(ncanUserBuffer>=n);
+	if (n > 0)
+	{
+		memcpy(mbuffer+me,p,n);
+		me += n;
+	}
+	return n;
+}
+
+int CByteReaderWriter::writeByte(char ch)
+{
+	return writeBytes(&ch,1);
+}
+
+char  *CByteReaderWriter::readBytes(int n)
+{
+	assert(mbuffer);
+	assert(me-mb>=n);
+	char *ptr = mbuffer+mb;
+	mb += n;
+	if (mb==me)
+	{
+		mb = me = 0;
+	}
+	return ptr;
+}
+
+char  CByteReaderWriter::readByte()
+{
+	assert(mbuffer);
+	assert(me-mb>=1);
+	char ch = mbuffer[mb];
+	mb++;
+	if (mb==me)
+	{
+		mb = me = 0;
+	}
+	return ch;
+}
+
+char  *CByteReaderWriter::peek(int n)
+{
+	assert(mbuffer);
+	assert(me-mb>=n);
+	return mbuffer+mb;
+}
+
+void  CByteReaderWriter::skip(int n)
+{
+	assert(mbuffer);
+	assert(me-mb>=n);
+	mb += n;
+}
+
+void CByteReaderWriter::resize()
+{
+	assert(mbufferSize >= 0);
+	mbuffer = (char *)realloc(mbuffer,mbufferSize);
+}
+
+int CByteReaderWriter::size()
+{
+	return me-mb;
+}
+
+

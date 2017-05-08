@@ -141,6 +141,84 @@ bool Clog::console()
 	return mconsole;
 }
 
+CertKey::CertKey(char *cert,char *key,char *dhparam,char *ciper)
+{
+	assert(cert!=NULL);
+	int len = strlen(cert);
+	mcert = new char[len+1];
+	memcpy(mcert,cert,len);
+	mcert[len] = '\0';
+
+	assert(key!=NULL);
+	len = strlen(key);
+	mkey = new char[len+1];
+	memcpy(mkey,key,len);
+	mkey[len] = '\0';
+	
+	assert(ciper!=NULL);
+	len = strlen(ciper);
+	mcipher = new char[len+1];
+	memcpy(mcipher,ciper,len);
+	mcipher[len] = '\0';
+
+	assert(dhparam!=NULL);
+	len = strlen(dhparam);
+	mdhparam = new char[len+1];
+	memcpy(mdhparam,dhparam,len);
+	mdhparam[len] = '\0';
+
+	misOpen = true;
+}
+
+CertKey::CertKey()
+{
+	misOpen = false;
+	mcert = NULL;
+	mkey = NULL;
+	mcipher = NULL;
+}
+
+CertKey::~CertKey()
+{
+	if (mcert)
+	{
+		delete[] mcert;
+	}
+	if (mkey)
+	{
+		delete[] mkey;
+	}
+	if (mcipher)
+	{
+		delete[] mcipher;
+	}
+}
+
+char *CertKey::certificateChain()
+{
+	return mcert;
+}
+
+char *CertKey::privateKey()
+{
+	return mkey;
+}
+
+char *CertKey::cipherPrefs()
+{
+	return mcipher;
+}
+
+char *CertKey::dhparam()
+{
+	return mdhparam;
+}
+
+bool CertKey::isOpenSSL()
+{
+	return misOpen;
+}
+
 CConfig *CConfig::minstance = NULL;
 CConfig *CConfig::instance()
 {
@@ -225,8 +303,11 @@ bool	CConfig::init(const char *configPath)
 	{
 		printf("*** [CConfig::init] config file %s parse json fail %s ***\n",
 			configPath,data);
+		delete[] data;
 		return false;
 	}
+	delete[] data;
+	data = NULL;
 	//监听端口
 	Json::Value value = root["listen"];
 	if (!value.isObject())
@@ -248,6 +329,81 @@ bool	CConfig::init(const char *configPath)
 	mHttps = new CAddr((char *)value["https"].asString().c_str(),443);
 	mRtmp = new CAddr((char *)value["rtmp"].asString().c_str(),1935);
 	mQuery = new CAddr((char *)value["query"].asString().c_str(),8981);
+
+	//证书
+	value = root["tls"];
+	if (value.isObject())
+	{
+		if (!value["cert"].isString() || 
+			!value["key"].isString() ||
+			!value["dhparam"].isString() ||
+			!value["cipher"].isString())
+		{
+			printf("*** [CConfig::init] config file %s tls term do not have cert/key/cipher ***\n",
+				configPath);
+			return false;
+		}
+		FILE *fp = fopen(value["cert"].asString().c_str(),"rb");
+		if (fp == NULL)
+		{
+			printf("*** [CConfig::init] open cert file %s fail,errstr=%s ***\n",
+				value["cert"].asString().c_str(),strerror(errno));
+			return false;
+		}
+		fseek(fp,0,SEEK_END);
+		int len = ftell(fp);
+		fseek(fp,0,SEEK_SET);
+		char *pcert = new char[len+1];
+		fread(pcert,1,len,fp);
+		pcert[len] = '\0';
+		fclose(fp);		
+
+		fp = fopen(value["key"].asString().c_str(),"rb");
+		if (fp == NULL)
+		{
+			printf("*** [CConfig::init] open key file %s fail,errstr=%s ***\n",
+				value["cert"].asString().c_str(),strerror(errno));
+			delete[] pcert;
+			return false;
+		}
+		fseek(fp,0,SEEK_END);
+		len = ftell(fp);
+		fseek(fp,0,SEEK_SET);
+		char *pkey = new char[len+1];
+		fread(pkey,1,len,fp);
+		pkey[len] = '\0';
+		fclose(fp);
+
+		fp = fopen(value["dhparam"].asString().c_str(),"rb");
+		if (fp == NULL)
+		{
+			printf("*** [CConfig::init] open dhparam file %s fail,errstr=%s ***\n",
+				value["cert"].asString().c_str(),strerror(errno));
+			delete[] pcert;
+			return false;
+		}
+		fseek(fp,0,SEEK_END);
+		len = ftell(fp);
+		fseek(fp,0,SEEK_SET);
+		char *pdhparam = new char[len+1];
+		fread(pdhparam,1,len,fp);
+		pdhparam[len] = '\0';
+		fclose(fp);
+
+		mcertKey = new CertKey(pcert,
+			pkey,
+			pdhparam,
+			(char *)value["cipher"].asString().c_str());
+
+		delete[] pcert;
+		delete[] pkey;
+		delete[] pdhparam;
+	}
+	else
+	{
+		mcertKey = new CertKey();
+	}
+
 	//日志
 	value = root["log"];
 	if (!value.isObject())
@@ -289,6 +445,11 @@ CAddr	*CConfig::addrRtmp()
 CAddr	*CConfig::addrQuery()
 {
 	return mQuery;
+}
+
+CertKey *CConfig::certKey()
+{
+	return mcertKey;
 }
 
 Clog	*CConfig::clog()

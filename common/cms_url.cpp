@@ -35,27 +35,33 @@ bool parseUrl(std::string url,LinkUrl &linkUrl)
 	{
 		linkUrl.host = addr;
 		linkUrl.isDefault = true;
-		if (linkUrl.protocol == "http") 
+		if (linkUrl.protocol == PROTOCOL_HTTP) 
 		{
 			linkUrl.port = 80;
 			linkUrl.addr = addr + ":80";
 		} 
-		else if (linkUrl.protocol == "rtmp") 
+		else if (linkUrl.protocol == PROTOCOL_HTTPS) 
+		{
+			linkUrl.port = 443;
+			linkUrl.addr = addr + ":443";
+		} 
+		else if (linkUrl.protocol == PROTOCOL_RTMP) 
 		{
 			linkUrl.port = 1935;
 			linkUrl.addr = addr + ":1935";
 		} 
-		else if (linkUrl.protocol == "ws") 
+		else if (linkUrl.protocol == PROTOCOL_WS) 
 		{
 			linkUrl.port = 80;
 			linkUrl.addr = addr + ":80";
 		} 
 		
-		else if (linkUrl.protocol == "wss") 
+		else if (linkUrl.protocol == PROTOCOL_WSS) 
 		{
 			linkUrl.port = 443;
 			linkUrl.addr = addr + ":443";
-		} else 
+		} 
+		else 
 		{
 			logs->error("***** [parseUrl] %s parse fail protocol error *****",url.c_str());
 			return false;

@@ -494,10 +494,12 @@ int CRtmpProtocol::want2Read()
 		int ret = readMessage();
 		if (ret == CMS_ERROR)
 		{
+			msuper->down8upBytes();
 			return CMS_ERROR;
 		}
 		if (ret == 0)
 		{
+			msuper->down8upBytes();
 			break;
 		}
 	}
@@ -564,6 +566,7 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 				doWriteTimeout();
 			}
 		}
+		msuper->down8upBytes();
 	}
 	return CMS_OK;
 }
@@ -1028,6 +1031,16 @@ int CRtmpProtocol::readRtmpPlayload(RtmpHeader &header,int fmt,int cid,int &hand
 		{
 			pMsg->bufLen = pIncs->lastHeader->msgLength;
 			pMsg->buffer = new char[pMsg->bufLen];
+		}
+		if (pIncs->currentMessage)
+		{
+			logs->warn("%s [CRtmpProtocol::readRtmpPlayload] %s rtmp %s current message is NULL but not delete",
+				mremoteAddr.c_str(),getRtmpType().c_str(),murl.c_str());			
+			if (pIncs->currentMessage->buffer)
+			{
+				delete[] pIncs->currentMessage->buffer;
+			}
+			delete pIncs->currentMessage;
 		}
 		pIncs->currentMessage = pMsg;
 	}

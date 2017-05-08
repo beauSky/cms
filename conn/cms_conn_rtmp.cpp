@@ -5,6 +5,7 @@
 #include <protocol/cms_flv.h>
 #include <common/cms_char_int.h>
 #include <taskmgr/cms_task_mgr.h>
+#include <static/cms_static.h>
 #include <libev/ev.h>
 #include <enc/cms_sha1.h>
 #include <assert.h>
@@ -55,6 +56,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	mjustTick = 0;
 	mrtmpType = rtmpType;
 	misPush = false;
+	mspeedTick = 0;
 
 	if (!pullUrl.empty())
 	{
@@ -131,11 +133,17 @@ int CConnRtmp::stop(std::string reason)
 		s->mhHash = mHash;
 		s->misPushTask = misPublish;
 		s->misRemove = true;
-		CFlvPool::instance()->push(mHashIdx,s);		
+		CFlvPool::instance()->push(mHashIdx,s);	
+
+		down8upBytes();
+		makeOneTaskDownload(mHash,0,true);
 	}
 	if (misPlay || misPublish)
 	{
 		CTaskMgr::instance()->pullTaskDel(mHash);
+
+		down8upBytes();
+		makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
 	}
 	if (misPush)
 	{
@@ -740,6 +748,9 @@ void CConnRtmp::copy2Slice(Slice *s)
 		s->mllCacheTT = mllCacheTT;
 
 		misChangeMediaInfo = false;
+
+		makeOneTaskDownload(mHash,0,false);
+		makeOneTaskMedia(mHash,miVideoFrameRate,miAudioFrameRate,miAudioSamplerate,miMediaRate,s->mstrVideoType,s->mstrAudioType,murl,mremoteAddr);
 	}
 }
 
@@ -806,6 +817,7 @@ int CConnRtmp::setPublishTask()
 	}
 	misPublish = true;
 	mrw->setReadBuffer(1024*32);
+	makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 	return CMS_OK;
 }
 
@@ -819,6 +831,7 @@ int CConnRtmp::setPlayTask()
 	}
 	misPlay = true;
 	mrw->setReadBuffer(1024*32);
+	makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 	return CMS_OK;
 }
 
@@ -826,7 +839,7 @@ void CConnRtmp::tryCreateTask()
 {
 	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
 	{
-		CTaskMgr::instance()->createTask(murl,"","",CREATE_ACT_PULL,false,false);
+		CTaskMgr::instance()->createTask(murl,"",murl,"",CREATE_ACT_PULL,false,false);
 	}
 }
 
@@ -854,4 +867,23 @@ void CConnRtmp::makePushHash()
 	mstrHash = hash2Char(mpushHash.data);
 	logs->debug("%s [CConnRtmp::makePushHash] %s rtmp %s push hash url %s,hash=%s",
 		mremoteAddr.c_str(),mstrPushUrl.c_str(),mrtmp->getRtmpType().c_str(),hashUrl.c_str(),mstrHash.c_str());
+}
+
+void CConnRtmp::down8upBytes()
+{
+	unsigned long tt = getTickCount();
+	if (tt - mspeedTick > 1000)
+	{
+		mspeedTick = tt;
+		int32 bytes = mrdBuff->readBytesNum();
+		if (bytes > 0 && misPushFlv)
+		{
+			makeOneTaskDownload(mHash,bytes,false);
+		}
+		bytes = mwrBuff->writeBytesNum();
+		if (bytes > 0)
+		{
+			makeOneTaskupload(mHash,bytes,PACKET_CONN_DATA);
+		}
+	}
 }

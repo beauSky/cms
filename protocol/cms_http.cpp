@@ -168,6 +168,7 @@ bool Request::setUrl(std::string url)
 		logs->error("***** [Request::setUrl] parse url %s fail *****",murl.c_str());
 		return false;
 	}
+	setHeader(HTTP_HEADER_HOST,mlinkUrl.addr);
 	return true;
 }
 
@@ -328,8 +329,14 @@ void Response::setRemoteAddr(std::string addr)
 	mremoteAddr = addr;
 }
 
+std::string Response::getResponse()
+{
+	return moriRsp;
+}
+
 bool Response::parseHeader(const char *header,int len)
 {
+	moriRsp.append(header,len);
 	mmapHeader.clear();
 	char version[10]={0}, reason[128+4]={0}, status[10]={0};
 	sscanf(header, "%9s %9s %128s", version, status, reason);
@@ -341,8 +348,8 @@ bool Response::parseHeader(const char *header,int len)
 			mremoteAddr.c_str(),moriUrl.c_str());
 		return false;
 	}
-	mstatusCode = atoi(reason);
-	mstatus = status;
+	mstatusCode = atoi(status);
+	mstatus = reason;
 	if (mstatusCode == HTTP_CODE_301 || mstatusCode == HTTP_CODE_302 || mstatusCode == HTTP_CODE_303)
 	{
 		mapStrStrIterator it = mmapHeader.find(HTTP_HEADER_LOCATION);
@@ -389,6 +396,13 @@ CHttp::CHttp(Conn *super,CBufferReader *rd,
 	misWriteHeader = false;
 	mheaderEnd = 0;
 	mbinaryWriter = new BinaryWriter;
+	msendRequestLen = 0;
+	misReadReuqest = false;
+	misChunked = false;
+	mchunkedLen = 0;
+	misReadChunkedLen = false;
+	mbyteReadWrite = NULL;
+	mchunkedReadrRN = 0;
 }
 
 CHttp::~CHttp()
@@ -417,6 +431,10 @@ CHttp::~CHttp()
 	if (mbinaryWriter)
 	{
 		delete mbinaryWriter;
+	}
+	if (mbyteReadWrite)
+	{
+		delete mbyteReadWrite;
 	}
 }
 
@@ -537,13 +555,18 @@ int CHttp::want2Read()
 				}
 				moriUrl = mrequest->getUrl();
 			}
-		}
+		}		
 	}
 	if (ret != -1 && misReadHeader)
 	{
 		ret = msuper->doDecode();
-		//more data
+		if (ret == CMS_ERROR)
+		{
+			return ret;
+		}
 	}
+	ret = msuper->doReadData();
+	msuper->down8upBytes();
 	return ret;
 }
 
@@ -573,7 +596,7 @@ int CHttp::want2Write(bool isTimeout)
 		}
 	}
 	int ret = CMS_OK;	
-	if (misReadHeader)
+	if (misClient)
 	{
 		if (misTls)
 		{
@@ -605,8 +628,62 @@ int CHttp::want2Write(bool isTimeout)
 				//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
 				doWriteTimeout();
 				return CMS_OK;
+			}				
+		}
+		if (!misReadReuqest)
+		{
+			mstrRequestHeader = mrequest->readRequest();
+			misReadReuqest = true;
+		}
+		if (msendRequestLen < (int)mstrRequestHeader.length())
+		{
+			int len = mstrRequestHeader.length() - msendRequestLen;
+			if (write(mstrRequestHeader.c_str()+msendRequestLen,len) == CMS_ERROR)
+			{
+				logs->error("%s [CHttp::want2Write] %s send http request fail,errno=%d,strerrno=%s ***",
+					mremoteAddr.c_str(),moriUrl.c_str(),mwrBuff->errnos(),mwrBuff->errnoCode());
+				return CMS_ERROR;
 			}
-			int ret = msuper->doTransmission();
+			msendRequestLen += len;
+		}						
+	}
+	else
+	{
+		if (misReadHeader)
+		{
+			if (misTls)
+			{
+				ret = mssl->flush();
+				if (ret == CMS_ERROR)
+				{
+					logs->error("%s [CHttp::want2Write] %s flush fail ***",
+						mremoteAddr.c_str(),moriUrl.c_str());
+					return CMS_ERROR;
+				}
+				if (!mssl->isUsable())
+				{
+					//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
+					doWriteTimeout();
+					return CMS_OK;
+				}
+			}
+			else
+			{
+				ret = mwrBuff->flush();
+				if (ret == CMS_ERROR)
+				{
+					logs->error("%s [CHttp::want2Write] %s flush fail,errno=%d,strerrno=%s ***",
+						mremoteAddr.c_str(),moriUrl.c_str(),mwrBuff->errnos(),mwrBuff->errnoCode());
+					return CMS_ERROR;
+				}
+				if (!mwrBuff->isUsable())
+				{
+					//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
+					doWriteTimeout();
+					return CMS_OK;
+				}				
+			}
+			ret = msuper->doTransmission();
 			if (ret < 0)
 			{
 				logs->error("***** %s [CHttp::want2Write] %s doTransmission fail *****", 
@@ -619,7 +696,8 @@ int CHttp::want2Write(bool isTimeout)
 				//	mremoteAddr.c_str(),getRtmpType().c_str());
 				doWriteTimeout();
 			}
-		}		
+			msuper->down8upBytes();
+		}
 	}
 	return CMS_OK;
 }
@@ -627,31 +705,188 @@ int CHttp::want2Write(bool isTimeout)
 int CHttp::read(char **data,int &len)
 {
 	assert(len > 0);
-	if (misTls)
+	int ret = 0;
+	if (misChunked)
 	{
-		int ret = mssl->read(data,len);
-		if (ret < 0)
+		if (!misReadChunkedLen)
 		{
-			return -1;
+			//chunk size
+			ret = readChunkedRN();
+			if (ret <= 0)
+			{
+				return ret;
+			}
+			assert(mchunkedReadrRN == 2);
+			mchunkedReadrRN = 0;
+			misReadChunkedLen = true;
+			mchunkedLen = hex2int64(mchunkBytesRN.c_str());
+			mchunkBytesRN.clear();
 		}
-		else if (ret == 0)
+		if (misReadChunkedLen)
+		{
+			//chunk body
+			char *p;
+			int max;
+			while (mchunkedLen > 0)
+			{
+				max = mchunkedLen > 1024*8 ? 1024*8 : mchunkedLen;
+				if (misTls)
+				{
+					ret = mssl->read(&p,max);
+					if (ret < 0)
+					{
+						return -1;
+					}
+					else if (ret == 0)
+					{
+						return 0;
+					}
+				}
+				else
+				{
+					if ( mrdBuff->size() < max && mrdBuff->grow(max) == CMS_ERROR)
+					{
+						return -1;
+					}
+					if (mrdBuff->size() < max)
+					{
+						return 0;
+					}
+					p = mrdBuff->readBytes(max);
+				}
+				mbyteReadWrite->writeBytes(p,max);
+				mchunkedLen -= max;
+			}
+			if (mchunkedLen == 0)
+			{
+				//chunked footer;
+				ret = readChunkedRN();
+				if (ret <= 0)
+				{
+					return ret;
+				}
+				assert(mchunkedReadrRN == 2);
+				mchunkedReadrRN = 0;
+				misReadChunkedLen = false;
+				mchunkBytesRN.clear();
+			}
+		}
+		if (mbyteReadWrite->size() >= len)
+		{
+			*data = mbyteReadWrite->readBytes(len);
+			return len;
+		}
+		else
 		{
 			return 0;
 		}
 	}
 	else
 	{
-		if ( mrdBuff->size() < len && mrdBuff->grow(len) == CMS_ERROR)
+		if (misTls)
 		{
-			return -1;
+			ret = mssl->read(data,len);
+			if (ret < 0)
+			{
+				return -1;
+			}
+			else if (ret == 0)
+			{
+				return 0;
+			}
 		}
-		if (mrdBuff->size() < len)
+		else
 		{
-			return 0;
+			if ( mrdBuff->size() < len && mrdBuff->grow(len) == CMS_ERROR)
+			{
+				return -1;
+			}
+			if (mrdBuff->size() < len)
+			{
+				return 0;
+			}
+			*data = mrdBuff->readBytes(len);
 		}
-		*data = mrdBuff->peek(len);
 	}
 	return len;
+}
+
+int CHttp::readChunkedRN()
+{
+	int ret = 0;
+	do 
+	{
+		char *p = NULL;
+		char ch;
+		int  max = 1;
+		if (misTls)
+		{
+			ret = mssl->read(&p,max);
+			if (ret < 0)
+			{
+				ret = -1;
+				break;
+			}
+			else if (ret == 0)
+			{
+				ret = 0;
+				break;
+			}
+			ch = *p;
+		}
+		else
+		{
+			if ( mrdBuff->size() < 1 && mrdBuff->grow(1) == CMS_ERROR)
+			{
+				logs->error("%s [CHttp::readChunkedRN] %s http header read one byte fail,errno=%d,strerrno=%s ***",
+					mremoteAddr.c_str(),moriUrl.c_str(),mrdBuff->errnos(),mrdBuff->errnoCode());
+				ret = -1;
+				break;
+			}
+			if (mrdBuff->size() < 1)
+			{
+				ret = 0;
+				break;
+			}			
+			ch = mrdBuff->readByte();
+		}
+		mchunkBytesRN.append(1,ch);
+		if (ch == '\r')
+		{
+			if (mchunkedReadrRN % 2 == 0)
+			{
+				mchunkedReadrRN++;
+			}
+			else
+			{
+				logs->warn("##### %s [CHttp::read] %s 1 read header unexpect #####", 
+					mremoteAddr.c_str(),moriUrl.c_str());
+				mchunkedReadrRN = 0;
+			}
+		}
+		else if (ch == '\n')
+		{
+			if (mchunkedReadrRN % 2 == 1)
+			{
+				mchunkedReadrRN++;
+			}
+			else
+			{
+				logs->warn("##### %s [CHttp::read] %s 2 read header unexpect #####", 
+					mremoteAddr.c_str(),moriUrl.c_str());
+				mchunkedReadrRN = 0;
+			}
+		}
+		else
+		{
+			mchunkedReadrRN = 0;
+		}
+		if (mchunkedReadrRN == 2)
+		{
+			break;
+		}
+	} while (true);
+	return ret;
 }
 
 int CHttp::write(const char *data,int &len)
@@ -719,6 +954,12 @@ void CHttp::syncIO()
 		msuper->evWriteIO();
 		doWriteTimeout();
 	}
+}
+
+void CHttp::setChunked()
+{
+	misChunked = true;
+	mbyteReadWrite = new CByteReaderWriter();
 }
 
 int CHttp::sendMetaData(Slice *s)

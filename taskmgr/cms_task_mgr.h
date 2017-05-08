@@ -15,6 +15,7 @@ struct CreateTaskPacket
 {
 	std::string			pullUrl;
 	std::string			pushUrl;
+	std::string			oriUrl;
 	std::string			refer;
 	int					createAct;
 	bool				isHotPush;
@@ -49,8 +50,8 @@ public:
 	void    pushTaskStopAllByIP(std::string strIP);		//删除推流ip
 	bool	pushTaskIsExist(HASH &hash);
 	//异步创建任务
-	void	createTask(std::string pullUrl,std::string pushUrl,std::string refer,
-		int createAct,bool isHotPush,bool isPush2Cdn);
+	void	createTask(std::string pullUrl,std::string pushUrl,std::string oriUrl,
+		std::string refer,int createAct,bool isHotPush,bool isPush2Cdn);
 	void	push(CreateTaskPacket *ctp);
 private:
 	bool	pop(CreateTaskPacket **ctp);

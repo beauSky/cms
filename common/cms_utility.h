@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #define gettid() syscall(__NR_gettid)
 #define _atoi64(val) strtoll(val, NULL, 10)
+#define hex2int64(val) strtoll(val, NULL, 16)
 #define cmsSleep(e) usleep(e*1000)
 #endif /* posix end */
 
