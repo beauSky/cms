@@ -36,7 +36,7 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	misWebSocket = false;
 	mflvTrans = new CFlvTransmission(mhttp);
 	mbinaryWriter = NULL;
-	misFlvPlay = false;
+	misAddConn = false;
 	misFlvRequest = false;
 
 	mspeedTick = 0;
@@ -102,16 +102,23 @@ int CHttpServer::handleEv(FdEvents *fe)
 
 int CHttpServer::stop(std::string reason)
 {
+	//可能会被调用两次,任务断开时,正常调用一次 reason 为空,
+	//主动断开时,会调用,reason 是调用原因
 	if (!reason.empty())
 	{
-		logs->error("%s [CHttpServer::stop] http %s stop with reason: %s ***",
+		logs->info("%s [CHttpServer::stop] http %s stop with reason: %s ***",
 			mremoteAddr.c_str(),murl.c_str(),reason.c_str());
 	}
-	if (misFlvPlay)
+	else
 	{
-		down8upBytes();
-		makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
-	}
+		logs->info("%s [CHttpServer::stop] http %s has been stop ",
+			mremoteAddr.c_str(),murl.c_str(),reason.c_str());
+		if (misAddConn)
+		{
+			down8upBytes();
+			makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
+		}
+	}	
 	return CMS_OK;
 }
 
@@ -412,9 +419,9 @@ int CHttpServer::doTransmission()
 	if (misFlvRequest)
 	{
 		ret = mflvTrans->doTransmission();
-		if (ret == 1 && !misFlvPlay)
+		if (ret == 1 && !misAddConn)
 		{
-			misFlvPlay = true;
+			misAddConn = true;
 			makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 			down8upBytes();
 		}		

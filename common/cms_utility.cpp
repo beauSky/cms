@@ -589,3 +589,32 @@ HASH makeHash(const char *bytes,int len)
 	return hash;
 }
 
+char *gSpeed[] = {"Byte/s", "KB/s", "MB/s", "GB/s"};
+char *gMem[] = {"Byte", "KB", "MB", "GB"};
+std::string parseSpeed8Mem(int64 speed,bool isSpeed)
+{
+	float fSpeed = (float)speed;
+	int i = 0;
+	for (; i < 4;)
+	{
+		float sp = fSpeed / (float)(1024);
+		if (int64(sp) == 0)
+		{
+			break;
+		}
+		fSpeed = sp;
+		i++;
+	}
+	char szValue[128] = {0};
+	snprintf(szValue,sizeof(szValue),"%.02f",fSpeed);
+	std::string value = szValue;
+	if (isSpeed)
+	{
+		value += gSpeed[i];
+	}
+	else
+	{
+		value += gMem[i];
+	}
+	return value;
+}

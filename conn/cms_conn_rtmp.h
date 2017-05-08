@@ -103,10 +103,12 @@ private:
 	std::string		mstrPushUrl;
 	HASH			mpushHash;
 
-	bool			misPublish;
-	bool			misPlay;
-	bool            misPushFlv;
-	bool			misPush;
+	bool			misPublish;		//是否是客户端publish
+	bool			misPlay;		//是否是客户端播放
+	bool            misPushFlv;		//是否往flvPool投递过数据
+	bool			misPush;		//是否是push任务
+	bool			misDown8upBytes;//是否统计过数据
+	bool			misAddConn;		//是否发送数据的连接
 
 	int64           mllIdx;
 

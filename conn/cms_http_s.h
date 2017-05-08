@@ -56,7 +56,7 @@ private:
 	HASH			mHash;
 	uint32          mHashIdx;
 	std::string		mstrHash;
-	bool			misFlvPlay;
+	bool			misAddConn;		//是否发送数据的连接
 	bool			misFlvRequest;
 
 	int64           mllIdx;

@@ -50,6 +50,8 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	misPlay = false;
 	mllIdx = 0;
 	misPushFlv = false;
+	misDown8upBytes = false;
+	misAddConn = false;
 	mflvTrans = new CFlvTransmission(mrtmp);
 	misStop = false;
 	mjustTickOld = 0;
@@ -122,32 +124,39 @@ int CConnRtmp::doit()
 }
 
 int CConnRtmp::stop(std::string reason)
-{
-	logs->debug("%s [CConnRtmp::stop] %s rtmp %s enter stop ",
-		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
-	//该接口可能被被调用两次,当reason为空是表示正常结束
-	if (reason.empty() && misPushFlv)
+{	
+	//可能会被调用两次,任务断开时,正常调用一次 reason 为空,
+	//主动断开时,会调用,reason 是调用原因
+	if (reason.empty())
 	{
-		Slice *s = newSlice();
-		copy2Slice(s);
-		s->mhHash = mHash;
-		s->misPushTask = misPublish;
-		s->misRemove = true;
-		CFlvPool::instance()->push(mHashIdx,s);	
-
-		down8upBytes();
-		makeOneTaskDownload(mHash,0,true);
-	}
-	if (misPlay || misPublish)
-	{
-		CTaskMgr::instance()->pullTaskDel(mHash);
-
-		down8upBytes();
-		makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
-	}
-	if (misPush)
-	{
-		CTaskMgr::instance()->pushTaskDel(mpushHash);
+		logs->debug("%s [CConnRtmp::stop] %s rtmp %s has been stop ",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
+		if (misPushFlv)
+		{
+			Slice *s = newSlice();
+			copy2Slice(s);
+			s->mhHash = mHash;
+			s->misPushTask = misPublish;
+			s->misRemove = true;
+			CFlvPool::instance()->push(mHashIdx,s);				
+		}
+		if (misPlay || misPublish)
+		{
+			CTaskMgr::instance()->pullTaskDel(mHash);
+		}
+		if (misPush)
+		{
+			CTaskMgr::instance()->pushTaskDel(mpushHash);
+		}
+		if (misDown8upBytes)
+		{
+			down8upBytes();
+			makeOneTaskDownload(mHash,0,true);
+		}
+		if (misAddConn)
+		{
+			makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
+		}		
 	}
 	if (!reason.empty())
 	{
@@ -756,7 +765,13 @@ void CConnRtmp::copy2Slice(Slice *s)
 
 int CConnRtmp::doTransmission()
 {
-	return mflvTrans->doTransmission();
+	int ret = mflvTrans->doTransmission();
+	if (ret == 1 && !misAddConn)
+	{
+		misAddConn = true;
+		makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
+	}
+	return ret;
 }
 
 std::string CConnRtmp::getUrl()
@@ -816,8 +831,7 @@ int CConnRtmp::setPublishTask()
 		return CMS_ERROR;
 	}
 	misPublish = true;
-	mrw->setReadBuffer(1024*32);
-	makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
+	mrw->setReadBuffer(1024*32);	
 	return CMS_OK;
 }
 
@@ -831,7 +845,6 @@ int CConnRtmp::setPlayTask()
 	}
 	misPlay = true;
 	mrw->setReadBuffer(1024*32);
-	makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 	return CMS_OK;
 }
 
@@ -878,6 +891,7 @@ void CConnRtmp::down8upBytes()
 		int32 bytes = mrdBuff->readBytesNum();
 		if (bytes > 0 && misPushFlv)
 		{
+			misDown8upBytes = true;
 			makeOneTaskDownload(mHash,bytes,false);
 		}
 		bytes = mwrBuff->writeBytesNum();

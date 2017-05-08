@@ -92,7 +92,8 @@ private:
 	int64 mllCacheTT;
 
 	bool  misChangeMediaInfo;
-	bool  misPushFlv;
+	bool  misPushFlv;			//是否往flvPool投递过数据
+	bool  misDown8upBytes;		//是否统计过数据
 	bool  misStop;
 
 	FlvPoolDataType miTagType;			//数据类型

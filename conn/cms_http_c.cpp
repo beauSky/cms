@@ -63,6 +63,7 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	mllCacheTT = 1000*15;
 	mllIdx = 0;
 	misPushFlv = false;
+	misDown8upBytes = false;
 	misStop = false;
 	misRedirect = false;
 	//flv
@@ -145,26 +146,35 @@ int ChttpClient::handleEv(FdEvents *fe)
 }
 
 int ChttpClient::stop(std::string reason)
-{
-	logs->debug("%s [ChttpClient::stop] %s enter stop ",
-		mremoteAddr.c_str(),murl.c_str());
-	//该接口可能被被调用两次,当reason为空是表示正常结束
-	if (reason.empty() && misPushFlv)
+{	
+	//可能会被调用两次,任务断开时,正常调用一次 reason 为空,
+	//主动断开时,会调用,reason 是调用原因
+	if (reason.empty())
 	{
-		Slice *s = newSlice();
-		copy2Slice(s);
-		s->mhHash = mHash;
-		s->misRemove = true;
-		CFlvPool::instance()->push(mHashIdx,s);		
+		logs->debug("%s [ChttpClient::stop] http %s has been stop ",
+			mremoteAddr.c_str(),murl.c_str());
+		if (misPushFlv)
+		{
+			Slice *s = newSlice();
+			copy2Slice(s);
+			s->mhHash = mHash;
+			s->misRemove = true;
+			CFlvPool::instance()->push(mHashIdx,s);
+		}
 
-		down8upBytes();
-		makeOneTaskDownload(mHash,0,true);
+		if (misDown8upBytes)
+		{
+			down8upBytes();
+			makeOneTaskDownload(mHash,0,true);
+		}	
+
+		CTaskMgr::instance()->pullTaskDel(mHash);
+		if (misRedirect)
+		{
+			tryCreateTask();
+		}
 	}
-	CTaskMgr::instance()->pullTaskDel(mHash);
-	if (misRedirect)
-	{
-		tryCreateTask();
-	}
+	
 	if (!reason.empty())
 	{
 		logs->error("%s [ChttpClient::stop] %s stop with reason: %s ***",
@@ -689,8 +699,9 @@ void ChttpClient::down8upBytes()
 	{
 		mspeedTick = tt;
 		int32 bytes = mrdBuff->readBytesNum();
-		if (bytes > 0)
+		if (bytes > 0 && misPushFlv)
 		{
+			misDown8upBytes = true;
 			makeOneTaskDownload(mHash,bytes,false);
 		}
 		bytes = mwrBuff->writeBytesNum();
