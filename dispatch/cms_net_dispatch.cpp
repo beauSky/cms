@@ -6,6 +6,7 @@
 #include <common/cms_utility.h>
 #include <conn/cms_conn_mgr.h>
 #include <ev/cms_ev.h>
+#include <ev/cms_ev.h>
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -147,6 +148,10 @@ void CNetDispatch::dispatchEv(cms_timer *ct,int fd,int events)
 		{
 			//assert(ptr->at(i) != NULL);
 			ptr->at(i)->pushEv(fd,events,ct);
+		}
+		else
+		{
+			atomicDec(ct);
 		}
 	}	
 	mdispatchLock.UnRLock();
