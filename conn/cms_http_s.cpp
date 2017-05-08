@@ -38,6 +38,7 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	mbinaryWriter = NULL;
 	misAddConn = false;
 	misFlvRequest = false;
+	misStop = false;
 
 	mspeedTick = 0;
 }
@@ -83,12 +84,32 @@ int CHttpServer::doit()
 
 int CHttpServer::handleEv(FdEvents *fe)
 {
+	if (misStop)
+	{
+		return CMS_ERROR;
+	}
+
 	if (fe->events & EventWrite || fe->events & EventWait2Write)
 	{
+		if (fe->events & EventWait2Write && fe->watcherCmsTimer !=  mhttp->cmsTimer2Write())
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
+		else if (fe->events & EventWrite && mwatcherWriteIO != fe->watcherWriteIO)
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
 		return doWrite(fe->events & EventWait2Write);
 	}
 	if (fe->events & EventRead || fe->events & EventWait2Read)
-	{
+	{		
+		if (fe->events & EventRead && mwatcherReadIO != fe->watcherReadIO)
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
 		return doRead();
 	}
 	if (fe->events & EventErrot)
@@ -118,7 +139,8 @@ int CHttpServer::stop(std::string reason)
 			down8upBytes();
 			makeOneTaskupload(mHash,0,PACKET_CONN_DEL);
 		}
-	}	
+	}
+	misStop = true;
 	return CMS_OK;
 }
 
@@ -170,7 +192,7 @@ int CHttpServer::doRead()
 }
 
 int CHttpServer::doWrite(bool isTimeout)
-{
+{	
 	return mhttp->want2Write(isTimeout);
 }
 

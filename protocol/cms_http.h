@@ -90,6 +90,7 @@ public:
 	std::string getUrl();
 	void syncIO();
 	void setChunked();
+	cms_timer *cmsTimer2Write();
 private:
 	void		doWriteTimeout();
 	int 		readChunkedRN();		

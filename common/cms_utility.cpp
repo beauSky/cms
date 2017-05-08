@@ -589,8 +589,8 @@ HASH makeHash(const char *bytes,int len)
 	return hash;
 }
 
-char *gSpeed[] = {"Byte/s", "KB/s", "MB/s", "GB/s"};
-char *gMem[] = {"Byte", "KB", "MB", "GB"};
+const char *g_Speed[] = {(char *)"Byte/s", "KB/s", "MB/s", "GB/s"};
+const char *g_Mem[] = {"Byte", "KB", "MB", "GB"};
 std::string parseSpeed8Mem(int64 speed,bool isSpeed)
 {
 	float fSpeed = (float)speed;
@@ -610,11 +610,11 @@ std::string parseSpeed8Mem(int64 speed,bool isSpeed)
 	std::string value = szValue;
 	if (isSpeed)
 	{
-		value += gSpeed[i];
+		value += g_Speed[i];
 	}
 	else
 	{
-		value += gMem[i];
+		value += g_Mem[i];
 	}
 	return value;
 }

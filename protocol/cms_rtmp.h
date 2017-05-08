@@ -42,6 +42,7 @@ public:
 	void syncIO();
 
 	void shouldCloseNodelay();
+	cms_timer *cmsTimer2Write();
 private:
 	//Œ’ ÷
 	int handShake();

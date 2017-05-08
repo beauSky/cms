@@ -58,6 +58,7 @@ private:
 	std::string		mstrHash;
 	bool			misAddConn;		//是否发送数据的连接
 	bool			misFlvRequest;
+	bool			misStop;
 
 	int64           mllIdx;
 	CFlvTransmission *mflvTrans;

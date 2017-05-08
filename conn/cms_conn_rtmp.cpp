@@ -176,10 +176,25 @@ int CConnRtmp::handleEv(FdEvents *fe)
 	
 	if (fe->events & EventWrite || fe->events & EventWait2Write)
 	{
+		if (fe->events & EventWait2Write && fe->watcherCmsTimer !=  mrtmp->cmsTimer2Write())
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
+		else if (fe->events & EventWrite && mwatcherWriteIO != fe->watcherWriteIO)
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
 		return doWrite(fe->events & EventWait2Write);
 	}
 	if (fe->events & EventRead || fe->events & EventWait2Read)
 	{
+		if (fe->events & EventRead && mwatcherReadIO != fe->watcherReadIO)
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
 		return doRead();
 	}
 	if (fe->events & EventJustTick)

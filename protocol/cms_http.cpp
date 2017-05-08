@@ -1136,3 +1136,8 @@ Response *CHttp::httpResponse()
 	}
 	return mresponse;
 }
+
+cms_timer *CHttp::cmsTimer2Write()
+{
+	return mcmsWriteTimeout;
+}

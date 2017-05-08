@@ -2868,3 +2868,8 @@ string CRtmpProtocol::getRtmpType()
 	}
 	return "unknow server tyep";
 }
+
+cms_timer *CRtmpProtocol::cmsTimer2Write()
+{
+	return mcmsWriteTimeout;
+}
