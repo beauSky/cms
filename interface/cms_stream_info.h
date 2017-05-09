@@ -22,26 +22,26 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#include <core/cms_errno.h>
-#include <string.h>
+#ifndef __CMS_INTERFACE_STREAM_INFO_H__
+#define __CMS_INTERFACE_STREAM_INFO_H__
+#include <common/cms_type.h>
+#include <string>
 
-char *gstrErrno[CMS_ERRNO_NONE-CMS_ERRNO_TIMEOUT]={
-	(char *)"Timeout",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation failed, check system errno",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation would block",
-	(char *)"Incoming Alert",
-	(char *)"Failure in some part of the TLS protocol. Ex: CBC verification failure",
-	(char *)"Error internal to s2n. A precondition could have failed",
-	(char *)"User input error. Ex: Providing an invalid cipher preference version"
-};
-
-char *cmsStrErrno(int code)
+class CStreamInfo
 {
-	if (code >= CMS_ERRNO_TIMEOUT && code < CMS_ERRNO_NONE)
-	{
-		return gstrErrno[code-CMS_ERRNO_TIMEOUT];
-	}
-	return strerror(code);
-}
+public:
+	CStreamInfo();
+	virtual ~CStreamInfo();
+	
+	virtual int		firstPlaySkipMilSecond() = 0;
+	virtual bool	isResetStreamTimestamp() = 0;
+	virtual bool	isNoTimeout() = 0;
+	virtual int		liveStreamTimeout() = 0;
+	virtual int		noHashTimeout() = 0;
+	virtual bool	isRealTimeStream() = 0;
+	virtual int64   cacheTT() = 0;
+	virtual std::string getRemoteIP() = 0;
+	virtual std::string getHost() = 0;
+	virtual void    makeOneTask() = 0;
+};
+#endif

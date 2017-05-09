@@ -1,3 +1,27 @@
+/*
+The MIT License (MIT)
+
+Copyright (c) 2017- cms(hsc)
+
+Author: hsc/kisslovecsh@foxmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 #include <conn/cms_conn_rtmp.h>
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
@@ -36,10 +60,8 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	mloop = NULL;
 	mwatcherReadIO = NULL;
 	mwatcherWriteIO = NULL;
-	mvideoType = 0xFF;
-	maudioType = 0xFF;
 	misChangeMediaInfo = false;
-	miFirstPlaySkipMilSecond = 0;
+	miFirstPlaySkipMilSecond = 3000;
 	misResetStreamTimestamp = false;	
 	misNoTimeout = false;
 	miLiveStreamTimeout = 1000*60*10;
@@ -59,6 +81,8 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	mrtmpType = rtmpType;
 	misPush = false;
 	mspeedTick = 0;
+	mcreateTT = getTimeUnix();
+	mflvPump = NULL;
 
 	if (!pullUrl.empty())
 	{
@@ -101,6 +125,10 @@ CConnRtmp::~CConnRtmp()
 	delete mrtmp;
 	delete mrdBuff;
 	delete mwrBuff;
+	if (mflvPump)
+	{
+		delete mflvPump;
+	}
 	mrw->close();
 	delete mrw;
 }
@@ -133,12 +161,7 @@ int CConnRtmp::stop(std::string reason)
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 		if (misPushFlv)
 		{
-			Slice *s = newSlice();
-			copy2Slice(s);
-			s->mhHash = mHash;
-			s->misPushTask = misPublish;
-			s->misRemove = true;
-			CFlvPool::instance()->push(mHashIdx,s);				
+			mflvPump->stop();
 		}
 		if (misPlay || misPublish)
 		{
@@ -401,150 +424,32 @@ int CConnRtmp::decodeMessage(RtmpMessage *msg)
 
 int  CConnRtmp::decodeVideo(RtmpMessage *msg,bool &isSave)
 {
-	if (msg->dataLen <= 0)
-	{
-		return CMS_OK;
-	}
 	mrtmp->shouldCloseNodelay();
-	byte vType = byte(msg->buffer[0] & 0x0F);
-	if (mvideoType == 0xFF || mvideoType != vType)
+	misChangeMediaInfo = false;
+	int ret = mflvPump->decodeVideo(msg->buffer,msg->dataLen,msg->absoluteTimestamp,misChangeMediaInfo);
+	if (ret == 1)
 	{
-		if (mvideoType == 0xFF)
-		{
-			logs->info("%s [CConnRtmp::decodeVideo] %s rtmp %s first video type %s",
-				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),getVideoType(vType).c_str());
-		}
-		else
-		{
-			logs->info("%s [CConnRtmp::decodeVideo] %s rtmp %s first video type change,old type %s,new type %s",
-				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),getVideoType(mvideoType).c_str(),getVideoType(vType).c_str());
-		}
-		mvideoType = vType;
-		misChangeMediaInfo = true;
+		isSave = true;
+		misPushFlv = true;
 	}
-	bool isKeyFrame = false;
-	FlvPoolDataType dataType = DATA_TYPE_VIDEO;
-	if (vType == 0x02)
-	{
-		if (msg->dataLen <= 1)
-		{
-			return CMS_OK; //空帧
-		}
-	}
-	else if (vType == 0x07)
-	{
-		if (msg->dataLen <= 5)
-		{
-			return CMS_OK; //空帧
-		}
-		if (msg->buffer[0] == 0x17)
-		{
-			isKeyFrame = true;
-			if (msg->buffer[1] == 0x00)
-			{
-				dataType = DATA_TYPE_FIRST_VIDEO;
-				miVideoFrameRate = 30;
-				misChangeMediaInfo = true;
-			}
-			else if (msg->buffer[1] == 0x01)
-			{
-
-			}
-		}
-	}
-	Slice *s = newSlice();
-	copy2Slice(s);	
-	s->mData = msg->buffer;
-	s->miDataLen = msg->dataLen;
-	s->mhHash = mHash;
-	s->miDataType = dataType;
-	s->misKeyFrame = isKeyFrame;
-	s->mllIndex = mllIdx;
-	s->misPushTask = misPublish;
-	if (dataType != DATA_TYPE_FIRST_VIDEO)
-	{		
-		mllIdx++;
-		s->muiTimestamp = msg->absoluteTimestamp;
-	}
-	CFlvPool::instance()->push(mHashIdx,s);
-	isSave = true;
-	misPushFlv = true;
 	return CMS_OK;
 }
 
 int  CConnRtmp::decodeAudio(RtmpMessage *msg,bool &isSave)
 {
-	if (msg->dataLen <= 0)
-	{
-		return CMS_OK;//空帧
-	}
 	mrtmp->shouldCloseNodelay();
-	byte aType = byte(msg->buffer[0]>>4 & 0x0F);
-	if (maudioType == 0xFF || maudioType != aType)
+	misChangeMediaInfo = false;
+	int ret = mflvPump->decodeAudio(msg->buffer,msg->dataLen,msg->absoluteTimestamp,misChangeMediaInfo);
+	if (ret == 1)
 	{
-		if (maudioType == 0xFF)
-		{
-			logs->info("%s [CConnRtmp::decodeAudio] %s rtmp %s first audio type %s",
-				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),getAudioType(aType).c_str());
-		}
-		else
-		{
-			logs->info("%s [CConnRtmp::decodeAudio] %s rtmp %s first audio type change,old type %s,new type %s",
-				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),getAudioType(maudioType).c_str(),getAudioType(aType).c_str());
-		}
-		maudioType = aType;
-		misChangeMediaInfo = true;
+		isSave = true;
+		misPushFlv = true;
 	}
-	FlvPoolDataType dataType = DATA_TYPE_AUDIO;
-	if (aType == 0x02 ||
-		aType == 0x04 ||
-		aType == 0x05 ||
-		aType == 0x06 ){
-		if (msg->dataLen <= 1)
-		{
-			return CMS_OK;//空帧
-		}
-	} 
-	else if (aType >= 0x0A )
-	{
-		if (msg->dataLen >= 2 &&
-			msg->buffer[1] == 0x00)
-		{
-			if (msg->dataLen <= 2)
-			{
-				return CMS_OK;//空帧
-			}
-			dataType = DATA_TYPE_FIRST_AUDIO;
-			if (msg->dataLen >= 4)
-			{
-				miAudioSamplerate = getAudioSampleRates(msg->buffer);
-				miAudioFrameRate = getAudioFrameRate(miAudioSamplerate);
-				logs->info("%s [CConnRtmp::decodeAudio] %s rtmp %s audio sampleRate=%d,audio frame rate=%d",
-					mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),miAudioSamplerate,miAudioFrameRate);
-			}
-		}
-	}
-	Slice *s = newSlice();
-	copy2Slice(s);	
-	s->mData = msg->buffer;
-	s->miDataLen = msg->dataLen;
-	s->mhHash = mHash;
-	s->miDataType = dataType;
-	s->mllIndex = mllIdx;
-	s->misPushTask = misPublish;
-	if (dataType != DATA_TYPE_FIRST_AUDIO)
-	{
-		mllIdx++;
-		s->muiTimestamp = msg->absoluteTimestamp;
-	}
-	CFlvPool::instance()->push(mHashIdx,s);
-	isSave = true;
-	misPushFlv = true;
 	return CMS_OK;
 }
 
 int  CConnRtmp::decodeVideoAudio(RtmpMessage *msg)
-{
+{	
 	uint32 uiHandleLen = 0;
 	uint32 uiOffset;
 	uint32 tagLen;
@@ -621,55 +526,21 @@ int  CConnRtmp::decodeVideoAudio(RtmpMessage *msg)
 
 int CConnRtmp::decodeMetaData(amf0::Amf0Block *block)
 {
-	std::string strRtmpContent = amf0::amf0BlockDump(block);
-	logs->info("%s [CConnRtmp::decodeMetaData] %s rtmp %s received metaData: %s",
-		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),strRtmpContent.c_str());
-	string strRtmpData = amf0::amf0Block2String(block);
-
-	string rate;
-	if (amf0::amf0Block5Value(block,"videodatarate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miMediaRate = atoi(rate.c_str()); //视频码率
-	}
-	if (amf0::amf0Block5Value(block,"audiodatarate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miMediaRate += atoi(rate.c_str()); //音频码率
-	}
-	string value;
-	if (amf0::amf0Block5Value(block,"width",value) != amf0::AMF0_TYPE_NONE)
-	{
-		miWidth = atoi(value.c_str()); //视频高度
-	}
-	if (amf0::amf0Block5Value(block,"height",value) != amf0::AMF0_TYPE_NONE)
-	{
-		miHeight += atoi(value.c_str()); //视频宽度
-	}
-	//采样率
-	if (amf0::amf0Block5Value(block,"framerate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miVideoFrameRate = atoi(rate.c_str()); 
-	}
-	if (amf0::amf0Block5Value(block,"audiosamplerate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miAudioSamplerate = atoi(rate.c_str()); 
-		miAudioFrameRate = getAudioFrameRate(miAudioSamplerate);
-	}
-	misChangeMediaInfo = true;
-	logs->info("%s [CConnRtmp::decodeMetaData] %s rtmp %s stream media rate=%d,width=%d,height=%d,video framerate=%d,audio samplerate=%d,audio framerate=%d",
-		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),strRtmpContent.c_str(),miMediaRate,miWidth,miHeight,miVideoFrameRate,miAudioSamplerate,miAudioFrameRate);
-
 	string strMetaData = amf0::amf0Block2String(block);
-	Slice *s = newSlice();
-	copy2Slice(s);
-	s->mData = new char[strMetaData.length()];
-	memcpy(s->mData,strMetaData.c_str(),strMetaData.length());
-	s->miDataLen = strMetaData.length();
-	s->mhHash = mHash;
-	s->misMetaData = true;
-	s->mllIndex = mllIdx;
-	s->misPushTask = misPublish;
-	CFlvPool::instance()->push(mHashIdx,s);
-	misPushFlv = true;
+
+	int len = strMetaData.length();
+	char *data = new char[len];
+	memcpy(data,strMetaData.c_str(),len);
+
+	int ret = mflvPump->decodeMetaData(data,len,misChangeMediaInfo);
+	if (ret == 1)
+	{
+		misPushFlv = true;
+	}
+	else
+	{
+		delete[] data;
+	}
 	return CMS_OK;
 }
 
@@ -693,89 +564,20 @@ int CConnRtmp::decodeSetDataFrame(amf0::Amf0Block *block)
 	amf0::amf0BlockPush(blockMetaData,objectEcma);
 
 	std::string strMetaData = amf0::amf0Block2String(blockMetaData);
-	std::string strRtmpContent = amf0::amf0BlockDump(blockMetaData);
 
-	logs->info("%s [CConnRtmp::decodeSetDataFrame] %s rtmp %s received metaData: %s",
-		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),strRtmpContent.c_str());
-	string rate;
-	if (amf0::amf0Block5Value(block,"videodatarate",rate) != amf0::AMF0_TYPE_NONE)
+	int len = strMetaData.length();
+	char *dm = new char[len];
+	memcpy(dm,strMetaData.c_str(),len);
+	int ret = mflvPump->decodeMetaData(dm,len,misChangeMediaInfo);
+	if (ret == 1)
 	{
-		miMediaRate = atoi(rate.c_str()); //视频码率
+		misPushFlv = true;
 	}
-	if (amf0::amf0Block5Value(block,"audiodatarate",rate) != amf0::AMF0_TYPE_NONE)
+	else
 	{
-		miMediaRate += atoi(rate.c_str()); //音频码率
+		delete[] dm;
 	}
-	string value;
-	if (amf0::amf0Block5Value(block,"width",value) != amf0::AMF0_TYPE_NONE)
-	{
-		miWidth = atoi(value.c_str()); //视频高度
-	}
-	if (amf0::amf0Block5Value(block,"height",value) != amf0::AMF0_TYPE_NONE)
-	{
-		miHeight = atoi(value.c_str()); //视频宽度
-	}
-	//采样率
-	if (amf0::amf0Block5Value(block,"framerate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miVideoFrameRate = atoi(rate.c_str()); 
-	}
-	if (amf0::amf0Block5Value(block,"audiosamplerate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miAudioSamplerate = atoi(rate.c_str());
-		miAudioFrameRate = getAudioFrameRate(miAudioSamplerate);
-	}
-	amf0::amf0BlockRelease(blockMetaData);
-	misChangeMediaInfo = true;	
-	logs->info("%s [CConnRtmp::decodeSetDataFrame] %s rtmp %s stream media rate=%d,width=%d,height=%d,video framerate=%d,audio samplerate=%d,audio framerate=%d",
-		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),strRtmpContent.c_str(),miMediaRate,miWidth,miHeight,miVideoFrameRate,miAudioSamplerate,miAudioFrameRate);
-
-	Slice *s = newSlice();
-	copy2Slice(s);
-	s->mData = new char[strMetaData.length()];
-	memcpy(s->mData,strMetaData.c_str(),strMetaData.length());
-	s->miDataLen = strMetaData.length();
-	s->mhHash = mHash;
-	s->misMetaData = true;
-	s->mllIndex = mllIdx;
-	s->misPushTask = misPublish;
-	CFlvPool::instance()->push(mHashIdx,s);
-	misPushFlv = true;
 	return CMS_OK;
-}
-
-void CConnRtmp::copy2Slice(Slice *s)
-{
-	if (misChangeMediaInfo)
-	{
-		s->misHaveMediaInfo = true;
-		s->miVideoFrameRate = miVideoFrameRate;
-		s->miVideoRate = miVideoRate;
-		s->miAudioFrameRate = miAudioFrameRate;
-		s->miAudioRate = miAudioRate;		
-		s->miFirstPlaySkipMilSecond = miFirstPlaySkipMilSecond;
-		s->misResetStreamTimestamp = misResetStreamTimestamp;
-		s->mstrUrl = murl;
-		s->miMediaRate = miMediaRate;
-		s->miVideoRate = miVideoRate;
-		s->miAudioRate = miAudioRate;
-		s->miVideoFrameRate = miVideoFrameRate;
-		s->miAudioFrameRate = miAudioFrameRate;
-		s->misNoTimeout = misNoTimeout;
-		s->mstrVideoType = getVideoType(mvideoType);
-		s->mstrAudioType = getAudioType(maudioType);
-		s->miLiveStreamTimeout = miLiveStreamTimeout;
-		s->miNoHashTimeout = miNoHashTimeout;
-		s->mstrRemoteIP = mremoteIP;
-		s->mstrHost = mHost;
-		s->misRealTimeStream = misRealTimeStream;
-		s->mllCacheTT = mllCacheTT;
-
-		misChangeMediaInfo = false;
-
-		makeOneTaskDownload(mHash,0,false);
-		makeOneTaskMedia(mHash,miVideoFrameRate,miAudioFrameRate,miAudioSamplerate,miMediaRate,s->mstrVideoType,s->mstrAudioType,murl,mremoteAddr);
-	}
 }
 
 int CConnRtmp::doTransmission()
@@ -846,7 +648,11 @@ int CConnRtmp::setPublishTask()
 		return CMS_ERROR;
 	}
 	misPublish = true;
-	mrw->setReadBuffer(1024*32);	
+	mrw->setReadBuffer(1024*32);
+
+	std::string modeName = "CConnRtmp "+mrtmp->getRtmpType();
+	mflvPump = new CFlvPump(this,mHash,mHashIdx,mremoteAddr,modeName,murl);
+	mflvPump->setPublish();
 	return CMS_OK;
 }
 
@@ -860,6 +666,9 @@ int CConnRtmp::setPlayTask()
 	}
 	misPlay = true;
 	mrw->setReadBuffer(1024*32);
+	
+	std::string modeName = "CConnRtmp "+mrtmp->getRtmpType();
+	mflvPump = new CFlvPump(this,mHash,mHashIdx,mremoteAddr,modeName,murl);
 	return CMS_OK;
 }
 
@@ -915,4 +724,52 @@ void CConnRtmp::down8upBytes()
 			makeOneTaskupload(mHash,bytes,PACKET_CONN_DATA);
 		}
 	}
+}
+
+int		CConnRtmp::firstPlaySkipMilSecond()
+{
+	return miFirstPlaySkipMilSecond;
+}
+
+bool	CConnRtmp::isResetStreamTimestamp()
+{
+	return misResetStreamTimestamp;
+}
+
+bool	CConnRtmp::isNoTimeout()
+{
+	return misNoTimeout;
+}
+
+int		CConnRtmp::liveStreamTimeout()
+{
+	return miLiveStreamTimeout;
+}
+
+int	CConnRtmp::noHashTimeout()
+{
+	return miNoHashTimeout;
+}
+
+bool	CConnRtmp::isRealTimeStream()
+{
+	return misRealTimeStream;
+}
+
+int64   CConnRtmp::cacheTT()
+{
+	return mllCacheTT;
+}
+
+std::string CConnRtmp::getHost()
+{
+	return mHost;
+}
+
+void    CConnRtmp::makeOneTask()
+{
+	makeOneTaskDownload(mHash,0,false);
+	makeOneTaskMedia(mHash,mflvPump->getVideoFrameRate(),mflvPump->getAudioFrameRate(),
+		mflvPump->getAudioSampleRate(),mflvPump->getMediaRate(),getVideoType(mflvPump->getVideoType()),
+		getAudioType(mflvPump->getAudioType()),murl,mremoteAddr);
 }

@@ -1,3 +1,27 @@
+/*
+The MIT License (MIT)
+
+Copyright (c) 2017- cms(hsc)
+
+Author: hsc/kisslovecsh@foxmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 #include <protocol/cms_flv_transmission.h>
 #include <flvPool/cms_flv_pool.h>
 #include <log/cms_log.h>
@@ -18,6 +42,8 @@ CFlvTransmission::CFlvTransmission(CProtocol *protocol)
 	mcacheTT = 0;
 	msliceFrameRate = 0;
 	mfastBitRate = new CFastBitRate;
+	mdurationtt = new CDurationTimestamp();
+	mfirstPlay = new CFirstPlay();
 }
 
 CFlvTransmission::~CFlvTransmission()
@@ -102,7 +128,7 @@ void CFlvTransmission::getSliceFrameRate()
 
 int CFlvTransmission::doTransmission()
 {
-	int ret = 1;
+	int ret = 0;
 	Slice *s = NULL;
 	Slice *ss = NULL;
 	int flvPoolCode;
@@ -110,6 +136,8 @@ int CFlvTransmission::doTransmission()
 	int	sliceNum = 0;
 	bool needSend = false;
 	int  dropPer = 0;
+	bool isVideo = false;
+	bool isAudio = false;
 	getSliceFrameRate();
 	uint32 tt = getTickCount();
 	do 
@@ -143,6 +171,17 @@ int CFlvTransmission::doTransmission()
 				break;
 			}
 		}
+		//首播丢帧初始化
+		if (!mfirstPlay->isInit())
+		{
+			mfirstPlay->init(mreadHash,mreadHashIdx,mprotocol->remoteAddr(),"flv",mprotocol->getUrl());
+		}
+		if (!mfirstPlay->checkfirstPlay())
+		{
+			ret = 0;
+			break;
+		}		
+		//首播丢帧初始化 结束
 		sliceNum = 0;
 		flvPoolCode = CFlvPool::instance()->readSlice(mreadHashIdx,mreadHash,mllTransIdx,&s,sliceNum);
 		if (flvPoolCode == FlvPoolCodeError)
@@ -153,16 +192,32 @@ int CFlvTransmission::doTransmission()
 			break;
 		}
 		else if (flvPoolCode == FlvPoolCodeOK)
-		{
+		{			
 			if (!mfastBitRate->isInit())
 			{
 				mfastBitRate->init(mprotocol->remoteAddr(),"flv",mprotocol->getUrl(),misWaterMark,
 					mwaterMarkOriHashIdx,mreadHashIdx,mwaterMarkOriHash,mreadHash);
 				mfastBitRate->setChangeBitRate();
 			}
+			if (!mdurationtt->isInit())
+			{
+				mdurationtt->init(mprotocol->remoteAddr(),"flv",mprotocol->getUrl());
+				mdurationtt->setResetTimestamp(true);
+			}
 			if (s)
 			{
 				needSend = true;
+				//首播丢帧
+				if (!mfirstPlay->checkShouldDropFrameCount(mllTransIdx,s))
+				{
+					ret = 0;
+					break;
+				}
+				needSend = !mfirstPlay->needDropFrame(s);
+				//首播丢帧 结束
+				isVideo = s->miDataType == DATA_TYPE_VIDEO;
+				isAudio = s->miDataType == DATA_TYPE_AUDIO;
+				
 				uiTimestamp = s->muiTimestamp;
 				bool isMergerFrame = false;
 				if (mfastBitRate->isChangeBitRate() ||
@@ -196,6 +251,12 @@ int CFlvTransmission::doTransmission()
 				}
 				//如果切换码率了,需要修改时间戳
 				uiTimestamp = mfastBitRate->changeBitRateSetTimestamp(s->miDataType,uiTimestamp);
+				//预防时间戳变小的情况
+				uiTimestamp = mdurationtt->keepTimestampIncrease(isVideo,uiTimestamp);
+				//预防时间戳变小的情况 结束
+				//重设时间戳
+				uiTimestamp = mdurationtt->resetTimestamp(uiTimestamp,isVideo);
+				//重设时间戳 结束				
 				//如果切换码率了,需要修改时间戳 结束
 				//动态丢帧
 				if (mfastBitRate->needResetFlags(s->miDataType,uiTimestamp))
@@ -203,11 +264,11 @@ int CFlvTransmission::doTransmission()
 					//时间戳变小了重设标志
 					mfastBitRate->resetDropFrameFlags();
 				}
-				if (s->miDataType == DATA_TYPE_AUDIO)
+				if (isAudio)
 				{
 					mfastBitRate->setNo1VideoAudioTimestamp(false, uiTimestamp);
 				}
-				else if (s->miDataType == DATA_TYPE_VIDEO)
+				else if (isVideo)
 				{
 					mfastBitRate->setNo1VideoAudioTimestamp(true, uiTimestamp);
 				}
@@ -228,7 +289,7 @@ int CFlvTransmission::doTransmission()
 					}
 					mfastBitRate->dropVideoFrame(mcacheTT,s->miDataType,msliceFrameRate,tt,uiTimestamp,sliceNum);
 				}
-				if (s->miDataType == DATA_TYPE_VIDEO)
+				if (isVideo)
 				{
 					if (mfastBitRate->getTransCodeNeedDropVideo())
 					{
@@ -260,7 +321,7 @@ int CFlvTransmission::doTransmission()
 						}
 					}
 				}
-				else if (s->miDataType == DATA_TYPE_AUDIO)
+				else if (isAudio)
 				{
 					
 				}
@@ -321,6 +382,14 @@ int CFlvTransmission::doTransmission()
 			mllFirstVideoIdx = -1;
 			mllFirstAudioIdx = -1;
 
+			uint32 sendTimestamp = 0;
+			if (s != NULL)
+			{
+				sendTimestamp = s->muiTimestamp;
+				atomicDec(s);
+			}
+
+			mdurationtt->resetDeltaTimestamp(sendTimestamp);
 			//还原丢帧转码状态
 			mfastBitRate->resetDropFrameFlags();
 

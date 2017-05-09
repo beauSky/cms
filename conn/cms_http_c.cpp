@@ -1,3 +1,27 @@
+/*
+The MIT License (MIT)
+
+Copyright (c) 2017- cms(hsc)
+
+Author: hsc/kisslovecsh@foxmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 #include <conn/cms_http_c.h>
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
@@ -51,10 +75,8 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	mloop = NULL;
 	mwatcherReadIO = NULL;
 	mwatcherWriteIO = NULL;
-	mvideoType = 0xFF;
-	maudioType = 0xFF;
 	misChangeMediaInfo = false;
-	miFirstPlaySkipMilSecond = 0;
+	miFirstPlaySkipMilSecond = 3000;
 	misResetStreamTimestamp = false;	
 	misNoTimeout = false;
 	miLiveStreamTimeout = 1000*60*10;
@@ -73,9 +95,8 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	miReadFlvHeader = 13;
 	mtagFlv = NULL;;
 	mtagLen = 0;
-	mtagReadLen = 0;
-
-	mspeedTick = 0;
+	mtagReadLen = 0;	
+	mspeedTick = 0;	
 
 	if (!pullUrl.empty())
 	{
@@ -86,6 +107,8 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 			mHost = linkUrl.host;
 		}		
 	}
+	std::string modeName = "ChttpClient";
+	mflvPump = new CFlvPump(this,mHash,mHashIdx,mremoteAddr,modeName,murl);
 }
 
 ChttpClient::~ChttpClient()
@@ -116,7 +139,8 @@ ChttpClient::~ChttpClient()
 	}
 	delete mhttp;
 	delete mrdBuff;
-	delete mwrBuff;	
+	delete mwrBuff;
+	delete mflvPump;
 	mrw->close();
 	delete mrw;
 }
@@ -175,11 +199,7 @@ int ChttpClient::stop(std::string reason)
 			mremoteAddr.c_str(),murl.c_str());
 		if (misPushFlv)
 		{
-			Slice *s = newSlice();
-			copy2Slice(s);
-			s->mhHash = mHash;
-			s->misRemove = true;
-			CFlvPool::instance()->push(mHashIdx,s);
+			mflvPump->stop();
 		}
 
 		if (misDown8upBytes)
@@ -392,7 +412,7 @@ int ChttpClient::doReadData()
 
 			switch (miTagType)
 			{
-			case 0x08:
+			case FLV_TAG_AUDIO:
 				//printf("%s [ChttpClient::doReadData] http %s handle audio tag \n",
 				//	mremoteAddr.c_str(),moriUrl.c_str());
 
@@ -400,7 +420,7 @@ int ChttpClient::doReadData()
 				mtagFlv = NULL;
 				mtagLen = 0;
 				break;
-			case 0x09:
+			case FLV_TAG_VIDEO:
 				//printf("%s [ChttpClient::doReadData] http %s handle video tag \n",
 				//	mremoteAddr.c_str(),moriUrl.c_str());
 
@@ -408,7 +428,7 @@ int ChttpClient::doReadData()
 				mtagFlv = NULL;
 				mtagLen = 0;
 				break;
-			case 0x12:
+			case FLV_TAG_SCRIPT:
 				//printf("%s [ChttpClient::doReadData] http %s handle metaData tag \n",
 				//	mremoteAddr.c_str(),moriUrl.c_str());
 
@@ -474,39 +494,6 @@ void ChttpClient::makeHash()
 		mremoteAddr.c_str(),murl.c_str(),hashUrl.c_str(),mstrHash.c_str());
 }
 
-void ChttpClient::copy2Slice(Slice *s)
-{
-	if (misChangeMediaInfo)
-	{
-		s->misHaveMediaInfo = true;
-		s->miVideoFrameRate = miVideoFrameRate;
-		s->miVideoRate = miVideoRate;
-		s->miAudioFrameRate = miAudioFrameRate;
-		s->miAudioRate = miAudioRate;		
-		s->miFirstPlaySkipMilSecond = miFirstPlaySkipMilSecond;
-		s->misResetStreamTimestamp = misResetStreamTimestamp;
-		s->mstrUrl = murl;
-		s->miMediaRate = miMediaRate;
-		s->miVideoRate = miVideoRate;
-		s->miAudioRate = miAudioRate;
-		s->miVideoFrameRate = miVideoFrameRate;
-		s->miAudioFrameRate = miAudioFrameRate;
-		s->misNoTimeout = misNoTimeout;
-		s->mstrVideoType = getVideoType(mvideoType);
-		s->mstrAudioType = getAudioType(maudioType);
-		s->miLiveStreamTimeout = miLiveStreamTimeout;
-		s->miNoHashTimeout = miNoHashTimeout;
-		s->mstrRemoteIP = mremoteIP;
-		s->mstrHost = mHost;
-		s->misRealTimeStream = misRealTimeStream;
-		s->mllCacheTT = mllCacheTT;
-
-		misChangeMediaInfo = false;
-
-		makeOneTaskMedia(mHash,miVideoFrameRate,miAudioFrameRate,miAudioSamplerate,miMediaRate,s->mstrVideoType,s->mstrAudioType,murl,mremoteAddr);
-	}
-}
-
 void ChttpClient::tryCreateTask()
 {
 	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
@@ -517,198 +504,46 @@ void ChttpClient::tryCreateTask()
 
 int ChttpClient::decodeMetaData(char *data,int len)
 {
-	amf0::Amf0Block *block = NULL;
-	block = amf0::amf0Parse(data,len);	
-	std::string strRtmpContent = amf0::amf0BlockDump(block);
-	logs->info("%s [ChttpClient::decodeMetaData] http %s received metaData: %s",
-		mremoteAddr.c_str(),moriUrl.c_str(),strRtmpContent.c_str());
-	string strRtmpData = amf0::amf0Block2String(block);
-
-	string rate;
-	if (amf0::amf0Block5Value(block,"videodatarate",rate) != amf0::AMF0_TYPE_NONE)
+	misChangeMediaInfo = false;
+	int ret = mflvPump->decodeMetaData(data,len,misChangeMediaInfo);
+	if (ret == 1)
 	{
-		miMediaRate = atoi(rate.c_str()); //ÊÓÆµÂëÂÊ
+		misPushFlv = true;
 	}
-	if (amf0::amf0Block5Value(block,"audiodatarate",rate) != amf0::AMF0_TYPE_NONE)
+	else
 	{
-		miMediaRate += atoi(rate.c_str()); //ÒôÆµÂëÂÊ
+		delete[] data;
 	}
-	string value;
-	if (amf0::amf0Block5Value(block,"width",value) != amf0::AMF0_TYPE_NONE)
-	{
-		miWidth = atoi(value.c_str()); //ÊÓÆµ¸ß¶È
-	}
-	if (amf0::amf0Block5Value(block,"height",value) != amf0::AMF0_TYPE_NONE)
-	{
-		miHeight += atoi(value.c_str()); //ÊÓÆµ¿í¶È
-	}
-	//²ÉÑùÂÊ
-	if (amf0::amf0Block5Value(block,"framerate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miVideoFrameRate = atoi(rate.c_str()); 
-	}
-	if (amf0::amf0Block5Value(block,"audiosamplerate",rate) != amf0::AMF0_TYPE_NONE)
-	{
-		miAudioSamplerate = atoi(rate.c_str()); 
-		miAudioFrameRate = getAudioFrameRate(miAudioSamplerate);
-	}
-	misChangeMediaInfo = true;
-	logs->info("%s [ChttpClient::decodeMetaData] http %s stream media rate=%d,width=%d,height=%d,video framerate=%d,audio samplerate=%d,audio framerate=%d",
-		mremoteAddr.c_str(),murl.c_str(),strRtmpContent.c_str(),miMediaRate,miWidth,miHeight,miVideoFrameRate,miAudioSamplerate,miAudioFrameRate);
-
-	Slice *s = newSlice();
-	copy2Slice(s);
-	s->mData = data;
-	s->miDataLen = len;
-	s->mhHash = mHash;
-	s->misMetaData = true;
-	s->mllIndex = mllIdx;
-	CFlvPool::instance()->push(mHashIdx,s);
-	misPushFlv = true;
 	return CMS_OK;
 }
 
 int  ChttpClient::decodeVideo(char *data,int len,uint32 timestamp)
 {
-	if (len <= 0)
+	misChangeMediaInfo = false;
+	int ret = mflvPump->decodeVideo(data,len,timestamp,misChangeMediaInfo);
+	if (ret == 1)
+	{
+		misPushFlv = true;
+	}
+	else
 	{
 		delete[] data;
-		return CMS_OK;
 	}
-	byte vType = byte(data[0] & 0x0F);
-	if (mvideoType == 0xFF || mvideoType != vType)
-	{
-		if (mvideoType == 0xFF)
-		{
-			logs->info("%s [ChttpClient::decodeVideo] http %s first video type %s",
-				mremoteAddr.c_str(),murl.c_str(),getVideoType(vType).c_str());
-		}
-		else
-		{
-			logs->info("%s [ChttpClient::decodeVideo] http %s first video type change,old type %s,new type %s",
-				mremoteAddr.c_str(),murl.c_str(),getVideoType(mvideoType).c_str(),getVideoType(vType).c_str());
-		}
-		mvideoType = vType;
-		misChangeMediaInfo = true;
-	}
-	bool isKeyFrame = false;
-	FlvPoolDataType dataType = DATA_TYPE_VIDEO;
-	if (vType == 0x02)
-	{
-		if (len <= 1)
-		{
-			delete[] data;
-			return CMS_OK; //¿ÕÖ¡
-		}
-	}
-	else if (vType == 0x07)
-	{
-		if (len <= 5)
-		{
-			delete[] data;
-			return CMS_OK; //¿ÕÖ¡
-		}
-		if (data[0] == 0x17)
-		{
-			isKeyFrame = true;
-			if (data[1] == 0x00)
-			{
-				dataType = DATA_TYPE_FIRST_VIDEO;
-				miVideoFrameRate = 30;
-				misChangeMediaInfo = true;
-			}
-			else if (data[1] == 0x01)
-			{
-
-			}
-		}
-	}
-	Slice *s = newSlice();
-	copy2Slice(s);	
-	s->mData = data;
-	s->miDataLen = len;
-	s->mhHash = mHash;
-	s->miDataType = dataType;
-	s->misKeyFrame = isKeyFrame;
-	s->mllIndex = mllIdx;
-	if (dataType != DATA_TYPE_FIRST_VIDEO)
-	{		
-		mllIdx++;
-		s->muiTimestamp = timestamp;
-	}
-	CFlvPool::instance()->push(mHashIdx,s);
-	misPushFlv = true;
 	return CMS_OK;
 }
 
 int  ChttpClient::decodeAudio(char *data,int len,uint32 timestamp)
 {
-	if (len <= 0)
+	misChangeMediaInfo = false;
+	int ret = mflvPump->decodeAudio(data,len,timestamp,misChangeMediaInfo);
+	if (ret == 1)
+	{
+		misPushFlv = true;
+	}
+	else
 	{
 		delete[] data;
-		return CMS_OK;//¿ÕÖ¡
 	}
-	byte aType = byte(data[0]>>4 & 0x0F);
-	if (maudioType == 0xFF || maudioType != aType)
-	{
-		if (maudioType == 0xFF)
-		{
-			logs->info("%s [ChttpClient::decodeAudio] http %s first audio type %s",
-				mremoteAddr.c_str(),murl.c_str(),getAudioType(aType).c_str());
-		}
-		else
-		{
-			logs->info("%s [ChttpClient::decodeAudio] http %s first audio type change,old type %s,new type %s",
-				mremoteAddr.c_str(),murl.c_str(),getAudioType(maudioType).c_str(),getAudioType(aType).c_str());
-		}
-		maudioType = aType;
-		misChangeMediaInfo = true;
-	}
-	FlvPoolDataType dataType = DATA_TYPE_AUDIO;
-	if (aType == 0x02 ||
-		aType == 0x04 ||
-		aType == 0x05 ||
-		aType == 0x06 ){
-			if (len <= 1)
-			{
-				delete[] data;
-				return CMS_OK;//¿ÕÖ¡
-			}
-	} 
-	else if (aType >= 0x0A )
-	{
-		if (len >= 2 &&
-			data[1] == 0x00)
-		{
-			if (len <= 2)
-			{
-				delete[] data;
-				return CMS_OK;//¿ÕÖ¡
-			}
-			dataType = DATA_TYPE_FIRST_AUDIO;
-			if (len >= 4)
-			{
-				miAudioSamplerate = getAudioSampleRates(data);
-				miAudioFrameRate = getAudioFrameRate(miAudioSamplerate);
-				logs->info("%s [ChttpClient::decodeAudio] http %s audio sampleRate=%d,audio frame rate=%d",
-					mremoteAddr.c_str(),murl.c_str(),miAudioSamplerate,miAudioFrameRate);
-			}
-		}
-	}
-	Slice *s = newSlice();
-	copy2Slice(s);	
-	s->mData = data;
-	s->miDataLen = len;
-	s->mhHash = mHash;
-	s->miDataType = dataType;
-	s->mllIndex = mllIdx;
-	if (dataType != DATA_TYPE_FIRST_AUDIO)
-	{
-		mllIdx++;
-		s->muiTimestamp = timestamp;
-	}
-	CFlvPool::instance()->push(mHashIdx,s);
-	misPushFlv = true;
 	return CMS_OK;
 }
 
@@ -731,3 +566,54 @@ void ChttpClient::down8upBytes()
 		}
 	}
 }
+
+int		ChttpClient::firstPlaySkipMilSecond()
+{
+	return miFirstPlaySkipMilSecond;
+}
+
+bool	ChttpClient::isResetStreamTimestamp()
+{
+	return misResetStreamTimestamp;
+}
+
+bool	ChttpClient::isNoTimeout()
+{
+	return misNoTimeout;
+}
+
+int		ChttpClient::liveStreamTimeout()
+{
+	return miLiveStreamTimeout;
+}
+
+int	ChttpClient::noHashTimeout()
+{
+	return miNoHashTimeout;
+}
+
+bool	ChttpClient::isRealTimeStream()
+{
+	return misRealTimeStream;
+}
+
+int64   ChttpClient::cacheTT()
+{
+	return mllCacheTT;
+}
+
+std::string ChttpClient::getHost()
+{
+	return mHost;
+}
+
+
+void    ChttpClient::makeOneTask()
+{
+	makeOneTaskDownload(mHash,0,false);
+	makeOneTaskMedia(mHash,mflvPump->getVideoFrameRate(),mflvPump->getAudioFrameRate(),
+		mflvPump->getAudioSampleRate(),mflvPump->getMediaRate(),getVideoType(mflvPump->getVideoType()),
+		getAudioType(mflvPump->getAudioType()),murl,mremoteAddr);
+}
+
+

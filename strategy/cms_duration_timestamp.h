@@ -22,26 +22,37 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#include <core/cms_errno.h>
-#include <string.h>
+#ifndef __CMS_DURATION_TIMESTAMP_H__
+#define __CMS_DURATION_TIMESTAMP_H__
+#include <common/cms_type.h>
+#include <string>
 
-char *gstrErrno[CMS_ERRNO_NONE-CMS_ERRNO_TIMEOUT]={
-	(char *)"Timeout",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation failed, check system errno",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation would block",
-	(char *)"Incoming Alert",
-	(char *)"Failure in some part of the TLS protocol. Ex: CBC verification failure",
-	(char *)"Error internal to s2n. A precondition could have failed",
-	(char *)"User input error. Ex: Providing an invalid cipher preference version"
-};
-
-char *cmsStrErrno(int code)
+class CDurationTimestamp
 {
-	if (code >= CMS_ERRNO_TIMEOUT && code < CMS_ERRNO_NONE)
-	{
-		return gstrErrno[code-CMS_ERRNO_TIMEOUT];
-	}
-	return strerror(code);
-}
+public:
+	CDurationTimestamp();
+	~CDurationTimestamp();
+
+	bool	isInit();
+	void	init(std::string remoteAddr,std::string modeName,std::string url);
+	void	setResetTimestamp(bool is);
+	uint32  resetTimestamp(uint32 timestamp,bool isVideo);
+	void	resetDeltaTimestamp(uint32 timestamp);
+	uint32	keepTimestampIncrease(bool isVideo,uint32 timestamp);
+private:
+	bool			misInit;
+	std::string		murl;
+	std::string		mremoteAddr;
+	std::string		modeName;
+
+	//重设时间戳
+	bool	misStreamResetTimestamp;  //开启重设时间戳标志
+	uint32	mvideoResetTimestamp;     //记录视频时间戳
+	uint32	maudioResetTimestamp;     //记录音频时间戳
+		//播放连接保持时间戳连续性 只有用户播放（或者转码、切片、截图、录制、转推才使用，保留）
+	uint32	mdeltaVideoTimestamp;
+	uint32	mdeltaLastVideoTimestamp;
+	uint32	mdeltaAudioTimestamp;
+	uint32	mdeltaLastAudioTimestamp;
+};
+#endif

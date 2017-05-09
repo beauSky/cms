@@ -22,26 +22,12 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#include <core/cms_errno.h>
-#include <string.h>
+#include <interface/cms_stream_info.h>
 
-char *gstrErrno[CMS_ERRNO_NONE-CMS_ERRNO_TIMEOUT]={
-	(char *)"Timeout",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation failed, check system errno",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation would block",
-	(char *)"Incoming Alert",
-	(char *)"Failure in some part of the TLS protocol. Ex: CBC verification failure",
-	(char *)"Error internal to s2n. A precondition could have failed",
-	(char *)"User input error. Ex: Providing an invalid cipher preference version"
-};
-
-char *cmsStrErrno(int code)
+CStreamInfo::CStreamInfo()
 {
-	if (code >= CMS_ERRNO_TIMEOUT && code < CMS_ERRNO_NONE)
-	{
-		return gstrErrno[code-CMS_ERRNO_TIMEOUT];
-	}
-	return strerror(code);
+}
+
+CStreamInfo::~CStreamInfo()
+{
 }

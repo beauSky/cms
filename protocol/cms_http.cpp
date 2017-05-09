@@ -1,3 +1,27 @@
+/*
+The MIT License (MIT)
+
+Copyright (c) 2017- cms(hsc)
+
+Author: hsc/kisslovecsh@foxmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 #include <protocol/cms_http.h>
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
@@ -964,7 +988,7 @@ void CHttp::setChunked()
 
 int CHttp::sendMetaData(Slice *s)
 {
-	*mbinaryWriter << (char)0x12;
+	*mbinaryWriter << (char)FLV_TAG_SCRIPT;
 	*mbinaryWriter << (char)(s->miDataLen >> 16);
 	*mbinaryWriter << (char)(s->miDataLen >> 8);
 	*mbinaryWriter << (char)(s->miDataLen);
@@ -1007,11 +1031,11 @@ int CHttp::sendVideoOrAudio(Slice *s,uint32 uiTimestamp)
 {
 	if (s->miDataType == DATA_TYPE_AUDIO || s->miDataType == DATA_TYPE_FIRST_AUDIO)
 	{
-		*mbinaryWriter << (char)0x08;
+		*mbinaryWriter << (char)FLV_TAG_AUDIO;
 	}
 	else if (s->miDataType == DATA_TYPE_VIDEO || s->miDataType == DATA_TYPE_FIRST_VIDEO)
 	{
-		*mbinaryWriter << (char)0x09;
+		*mbinaryWriter << (char)FLV_TAG_VIDEO;
 	}
 	else
 	{
@@ -1141,3 +1165,4 @@ cms_timer *CHttp::cmsTimer2Write()
 {
 	return mcmsWriteTimeout;
 }
+

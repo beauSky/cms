@@ -22,26 +22,39 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#include <core/cms_errno.h>
-#include <string.h>
+#ifndef __CMS_FIRST_PLAY_H__
+#define __CMS_FIRST_PLAY_H__
+#include <common/cms_type.h>
+#include <flvPool/cms_flv_pool.h>
+#include <string>
 
-char *gstrErrno[CMS_ERRNO_NONE-CMS_ERRNO_TIMEOUT]={
-	(char *)"Timeout",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation failed, check system errno",
-	(char *)"Connection has been EOF",
-	(char *)"Underlying I/O operation would block",
-	(char *)"Incoming Alert",
-	(char *)"Failure in some part of the TLS protocol. Ex: CBC verification failure",
-	(char *)"Error internal to s2n. A precondition could have failed",
-	(char *)"User input error. Ex: Providing an invalid cipher preference version"
-};
-
-char *cmsStrErrno(int code)
+class CFirstPlay
 {
-	if (code >= CMS_ERRNO_TIMEOUT && code < CMS_ERRNO_NONE)
-	{
-		return gstrErrno[code-CMS_ERRNO_TIMEOUT];
-	}
-	return strerror(code);
-}
+public:
+	CFirstPlay();
+	~CFirstPlay();
+
+	bool	isInit();
+	void	init(HASH &hash,uint32 &hashIdx,std::string remoteAddr,std::string modeName,std::string url);
+	bool	checkfirstPlay();
+	bool	checkShouldDropFrameCount(int64 &transIdx,Slice *s);
+	bool	needDropFrame(Slice *s);
+private:
+	bool			misInit;
+	std::string		murl;
+	std::string		mremoteAddr;
+	std::string		modeName;
+	HASH			mhash;
+	uint32			mhashIdx;
+
+	//首次播放
+	int32	mfirstPlaySkipMilSecond;		//首播丢帧毫秒数
+	int32	mdistanceKeyFrame;				//关键帧距离
+	int32	mdropSliceNum;					//丢帧数
+	int32	mhaveDropSliceNum;				//已经丢帧数
+	bool	misSetFirstFrame;
+	int		mvideoFrameRate;
+	int		maudioFrameRate;
+	int64	beginTT;
+};
+#endif

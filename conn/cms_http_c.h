@@ -1,21 +1,48 @@
 /*
+The MIT License (MIT)
+
+Copyright (c) 2017- cms(hsc)
+
+Author: hsc/kisslovecsh@foxmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+/*
 该http支持简单的http请求，普遍的http-flv，不支持gzip
 */
 #ifndef __CMS_HTTP_C_H__
 #define __CMS_HTTP_C_H__
 #include <interface/cms_interf_conn.h>
 #include <interface/cms_read_write.h>
+#include <interface/cms_stream_info.h>
+#include <protocol/cms_flv_pump.h>
 #include <common/cms_type.h>
 #include <protocol/cms_http.h>
+#include <strategy/cms_jitter.h>
 #include <string>
 
-class ChttpClient:public Conn
+class ChttpClient:public Conn,public CStreamInfo
 {
 public:
 	ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUrl,
 		std::string refer,bool isTls);
 	~ChttpClient();
-
+	//conn 接口
 	int doit();
 	int handleEv(FdEvents *fe);
 	int stop(std::string reason);
@@ -26,6 +53,18 @@ public:
 	struct ev_io    *evReadIO();
 	struct ev_io    *evWriteIO();
 	void down8upBytes();
+
+	//stream info 接口
+	int		firstPlaySkipMilSecond();
+	bool	isResetStreamTimestamp();
+	bool	isNoTimeout();
+	int		liveStreamTimeout();
+	int 	noHashTimeout();
+	bool	isRealTimeStream();
+	int64   cacheTT();
+	//std::string getRemoteIP() = 0;
+	std::string getHost();
+	void    makeOneTask();
 
 	void setEVLoop(struct ev_loop *loop);
 
@@ -42,7 +81,6 @@ private:
 	int  handle();
 	int	 handleFlv(int &ret);
 	void makeHash();
-	void copy2Slice(Slice *s);
 	void tryCreateTask();
 	int  decodeMetaData(char *data,int len);
 	int  decodeVideo(char *data,int len,uint32 timestamp);
@@ -72,17 +110,6 @@ private:
 	CBufferReader	*mrdBuff;
 	CBufferWriter	*mwrBuff;
 
-	//流信息
-	int   miWidth;
-	int   miHeight;
-	int   miMediaRate;
-	int   miVideoFrameRate;
-	int   miVideoRate;
-	int   miAudioFrameRate;
-	int   miAudioRate;
-	int   miAudioSamplerate;
-	byte  mvideoType;
-	byte  maudioType;
 	int   miFirstPlaySkipMilSecond;
 	bool  misResetStreamTimestamp;	
 	bool  misNoTimeout;
@@ -107,6 +134,9 @@ private:
 	int   mtagReadLen;
 
 	unsigned long  mspeedTick;
+
+	CFlvPump		*mflvPump;
+	int64			mcreateTT;
 };
 
 #endif
