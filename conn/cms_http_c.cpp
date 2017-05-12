@@ -99,6 +99,11 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	mspeedTick = 0;
 	mtimeoutTick = getTimeUnix();
 
+	//速度统计
+	m10SecdownBytes = 0;
+	m10SecUpBytes = 0;
+	m10SecTick = 0;
+
 	if (!pullUrl.empty())
 	{
 		makeHash();
@@ -585,10 +590,26 @@ void ChttpClient::down8upBytes()
 			misDown8upBytes = true;
 			makeOneTaskDownload(mHash,bytes,false);
 		}
+
+		m10SecdownBytes += bytes;
+
 		bytes = mwrBuff->writeBytesNum();
 		if (bytes > 0)
 		{
 			makeOneTaskupload(mHash,bytes,PACKET_CONN_DATA);
+		}
+
+		m10SecUpBytes += bytes;
+		m10SecTick++;
+		if (((m10SecTick+5) & 0x0F) == 0)
+		{
+			logs->debug("%s [ChttpClient::down8upBytes] http %s download speed %s,upload speed %s",
+				mremoteAddr.c_str(),murl.c_str(),
+				parseSpeed8Mem(m10SecdownBytes/m10SecTick,true).c_str(),
+				parseSpeed8Mem(m10SecUpBytes/m10SecTick,true).c_str());
+			m10SecTick = 0;
+			m10SecdownBytes = 0;
+			m10SecUpBytes = 0;
 		}
 	}
 }

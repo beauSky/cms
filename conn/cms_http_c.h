@@ -123,6 +123,11 @@ private:
 	bool  misDown8upBytes;		//是否统计过数据
 	bool  misStop;
 
+	//速度统计
+	int32			m10SecdownBytes;
+	int32			m10SecUpBytes;
+	int32			m10SecTick;
+
 	FlvPoolDataType miTagType;			//数据类型
 	uint32			muiTimestamp;	    //该slice数据对应rtmp的时间戳
 	int	  miReadFlvHeader;

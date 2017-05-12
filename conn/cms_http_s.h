@@ -90,6 +90,11 @@ private:
 	CBufferReader	*mrdBuff;
 	CBufferWriter	*mwrBuff;
 
+	//速度统计
+	int32			m10SecdownBytes;
+	int32			m10SecUpBytes;
+	int32			m10SecTick;
+
 	//websocket
 	bool			misWebSocket;
 	std::string		mwsOrigin               ;

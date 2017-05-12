@@ -136,6 +136,10 @@ private:
 	bool			misPush;		//是否是push任务
 	bool			misDown8upBytes;//是否统计过数据
 	bool			misAddConn;		//是否发送数据的连接
+	//速度统计
+	int32			m10SecdownBytes;
+	int32			m10SecUpBytes;
+	int32			m10SecTick;
 
 	int64           mllIdx;
 
