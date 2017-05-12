@@ -90,9 +90,9 @@ int event2event(int revents)
 	return event;
 }
 
-void *cms_timer_Write_thread(void *param)
+void *cms_timer_write_thread(void *param)
 {
-	logs->info("##### cms_timer_Write_thread enter thread=%d ###", gettid());
+	logs->info("##### cms_timer_write_thread enter thread=%d ###", gettid());
 	cms_timer *ct;
 	bool is;
 	long long  mils = 0;
@@ -128,7 +128,7 @@ void *cms_timer_Write_thread(void *param)
 			cmsSleep(mils);
 		}
 	} while (gqueueWR);
-	logs->info("##### cms_timer_Write_thread leave thread=%d ###", gettid());
+	logs->info("##### cms_timer_write_thread leave thread=%d ###", gettid());
 	return NULL;
 }
 
@@ -199,7 +199,7 @@ void cms_timer_start(cms_timer *ct,bool isWrite/* = true*/)
 		if (!gqueueWR)
 		{
 			gqueueWR = true;
-			cmsCreateThread(&gqueueWTT,cms_timer_Write_thread,NULL,true);		
+			cmsCreateThread(&gqueueWTT,cms_timer_write_thread,NULL,true);		
 		}
 		gqueueWT.push(ct);
 		gqueueWL.Unlock();
@@ -211,7 +211,7 @@ void cms_timer_start(cms_timer *ct,bool isWrite/* = true*/)
 		if (!gqueueRR)
 		{
 			gqueueRR = true;
-			cmsCreateThread(&gqueueRTT,cms_timer_Write_thread,NULL,true);		
+			cmsCreateThread(&gqueueRTT,cms_timer_read_thread,NULL,true);		
 		}
 		gqueueRT.push(ct);
 		gqueueRL.Unlock();

@@ -137,9 +137,9 @@ private:
 	bool			misDown8upBytes;//是否统计过数据
 	bool			misAddConn;		//是否发送数据的连接
 	//速度统计
-	int32			m10SecdownBytes;
-	int32			m10SecUpBytes;
-	int32			m10SecTick;
+	int32			mxSecdownBytes;
+	int32			mxSecUpBytes;
+	int32			mxSecTick;
 
 	int64           mllIdx;
 

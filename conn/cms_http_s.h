@@ -91,9 +91,9 @@ private:
 	CBufferWriter	*mwrBuff;
 
 	//速度统计
-	int32			m10SecdownBytes;
-	int32			m10SecUpBytes;
-	int32			m10SecTick;
+	int32			mxSecdownBytes;
+	int32			mxSecUpBytes;
+	int32			mxSecTick;
 
 	//websocket
 	bool			misWebSocket;

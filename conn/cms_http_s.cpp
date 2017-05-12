@@ -68,9 +68,9 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	mtimeoutTick = getTimeUnix();
 
 	//速度统计
-	m10SecdownBytes = 0;
-	m10SecUpBytes = 0;
-	m10SecTick = 0;
+	mxSecdownBytes = 0;
+	mxSecUpBytes = 0;
+	mxSecTick = 0;
 }
 
 CHttpServer::~CHttpServer()
@@ -597,7 +597,7 @@ void CHttpServer::down8upBytes()
 				makeOneTaskDownload(mHash,bytes,false);
 			}
 
-			m10SecdownBytes += bytes;
+			mxSecdownBytes += bytes;
 
 			bytes = mwrBuff->writeBytesNum();
 			if (bytes > 0)
@@ -605,17 +605,17 @@ void CHttpServer::down8upBytes()
 				makeOneTaskupload(mHash,bytes,PACKET_CONN_DATA);
 			}
 
-			m10SecUpBytes += bytes;
-			m10SecTick++;
-			if (((m10SecTick+5) & 0x0F) == 0)
+			mxSecUpBytes += bytes;
+			mxSecTick++;
+			if (((mxSecTick+(0x0F-(CMS_SPEED_DURATION>=0x0F?10:CMS_SPEED_DURATION)+1)) & 0x0F) == 0)
 			{
 				logs->debug("%s [CHttpServer::down8upBytes] http %s download speed %s,upload speed %s",
 					mremoteAddr.c_str(),murl.c_str(),
-					parseSpeed8Mem(m10SecdownBytes/m10SecTick,true).c_str(),
-					parseSpeed8Mem(m10SecUpBytes/m10SecTick,true).c_str());
-				m10SecTick = 0;
-				m10SecdownBytes = 0;
-				m10SecUpBytes = 0;
+					parseSpeed8Mem(mxSecdownBytes/mxSecTick,true).c_str(),
+					parseSpeed8Mem(mxSecUpBytes/mxSecTick,true).c_str());
+				mxSecTick = 0;
+				mxSecdownBytes = 0;
+				mxSecUpBytes = 0;
 			}
 		}
 	}
