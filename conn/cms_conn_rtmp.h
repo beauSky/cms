@@ -144,5 +144,7 @@ private:
 
 	CFlvPump		*mflvPump;
 	int64			mcreateTT;
+
+	int64			mtimeoutTick;
 };
 #endif

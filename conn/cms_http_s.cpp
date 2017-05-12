@@ -65,6 +65,7 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	misStop = false;
 
 	mspeedTick = 0;
+	mtimeoutTick = getTimeUnix();
 }
 
 CHttpServer::~CHttpServer()
@@ -221,6 +222,13 @@ struct ev_io *CHttpServer::evWriteIO()
 
 int CHttpServer::doRead(bool isTimeout)
 {
+	int64 tn = getTimeUnix();
+	if (tn - mtimeoutTick > 30)
+	{
+		logs->error("%s [CHttpServer::doRead] http %s is timeout ***",
+			mremoteAddr.c_str(),murl.c_str());
+		return CMS_ERROR;
+	}
 	return mhttp->want2Read(isTimeout);
 }
 
@@ -479,7 +487,11 @@ int CHttpServer::doTransmission()
 			misAddConn = true;
 			makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 			down8upBytes();
-		}		
+		}
+		if (ret == 1)
+		{
+			mtimeoutTick = getTimeUnix();
+		}
 	}
 	return ret;
 }

@@ -96,7 +96,8 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	mtagFlv = NULL;;
 	mtagLen = 0;
 	mtagReadLen = 0;	
-	mspeedTick = 0;	
+	mspeedTick = 0;
+	mtimeoutTick = getTimeUnix();
 
 	if (!pullUrl.empty())
 	{
@@ -430,6 +431,7 @@ int ChttpClient::doReadData()
 			case FLV_TAG_AUDIO:
 				//printf("%s [ChttpClient::doReadData] http %s handle audio tag \n",
 				//	mremoteAddr.c_str(),moriUrl.c_str());
+				mtimeoutTick = getTimeUnix();
 
 				decodeAudio(mtagFlv,mtagLen,muiTimestamp);
 				mtagFlv = NULL;
@@ -438,6 +440,7 @@ int ChttpClient::doReadData()
 			case FLV_TAG_VIDEO:
 				//printf("%s [ChttpClient::doReadData] http %s handle video tag \n",
 				//	mremoteAddr.c_str(),moriUrl.c_str());
+				mtimeoutTick = getTimeUnix();
 
 				decodeVideo(mtagFlv,mtagLen,muiTimestamp);
 				mtagFlv = NULL;
@@ -446,6 +449,7 @@ int ChttpClient::doReadData()
 			case FLV_TAG_SCRIPT:
 				//printf("%s [ChttpClient::doReadData] http %s handle metaData tag \n",
 				//	mremoteAddr.c_str(),moriUrl.c_str());
+				mtimeoutTick = getTimeUnix();
 
 				decodeMetaData(mtagFlv,mtagLen);
 				mtagFlv = NULL;
@@ -473,6 +477,13 @@ int ChttpClient::sendBefore(const char *data,int len)
 
 int ChttpClient::doRead(bool isTimeout)
 {
+	int64 tn = getTimeUnix();
+	if (tn - mtimeoutTick > 30)
+	{
+		logs->error("%s [ChttpClient::doRead] http %s is timeout ***",
+			mremoteAddr.c_str(),murl.c_str());
+		return CMS_ERROR;
+	}
 	return mhttp->want2Read(isTimeout);
 }
 

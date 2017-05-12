@@ -98,6 +98,7 @@ private:
 
 	BinaryWriter	*mbinaryWriter;
 
-	unsigned long  mspeedTick;
+	unsigned long   mspeedTick;
+	int64			mtimeoutTick;
 };
 #endif

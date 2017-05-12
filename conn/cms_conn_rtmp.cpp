@@ -83,6 +83,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	mspeedTick = 0;
 	mcreateTT = getTimeUnix();
 	mflvPump = NULL;
+	mtimeoutTick = getTimeUnix();
 
 	if (!pullUrl.empty())
 	{
@@ -252,6 +253,16 @@ int CConnRtmp::doRead(bool isTimeout)
 {
 	//logs->debug("%s [CConnRtmp::doRead] rtmp %s doRead",
 	//	mremoteAddr.c_str(),mrtmp->getRtmpType().c_str());
+	if (isTimeout)
+	{
+		int64 tn = getTimeUnix();
+		if (tn - mtimeoutTick > 30)
+		{
+			logs->error("%s [CConnRtmp::doRead] %s rtmp %s is timeout ***",
+				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
+			return CMS_ERROR;
+		}
+	}
 	return mrtmp->want2Read(isTimeout);
 }
 
@@ -439,6 +450,8 @@ int CConnRtmp::decodeMessage(RtmpMessage *msg)
 
 int  CConnRtmp::decodeVideo(RtmpMessage *msg,bool &isSave)
 {
+	mtimeoutTick = getTimeUnix();
+
 	mrtmp->shouldCloseNodelay();
 	misChangeMediaInfo = false;
 	int ret = mflvPump->decodeVideo(msg->buffer,msg->dataLen,msg->absoluteTimestamp,misChangeMediaInfo);
@@ -452,6 +465,8 @@ int  CConnRtmp::decodeVideo(RtmpMessage *msg,bool &isSave)
 
 int  CConnRtmp::decodeAudio(RtmpMessage *msg,bool &isSave)
 {
+	mtimeoutTick = getTimeUnix();
+
 	mrtmp->shouldCloseNodelay();
 	misChangeMediaInfo = false;
 	int ret = mflvPump->decodeAudio(msg->buffer,msg->dataLen,msg->absoluteTimestamp,misChangeMediaInfo);
@@ -541,8 +556,9 @@ int  CConnRtmp::decodeVideoAudio(RtmpMessage *msg)
 
 int CConnRtmp::decodeMetaData(amf0::Amf0Block *block)
 {
-	string strMetaData = amf0::amf0Block2String(block);
+	mtimeoutTick = getTimeUnix();
 
+	string strMetaData = amf0::amf0Block2String(block);
 	int len = strMetaData.length();
 	char *data = new char[len];
 	memcpy(data,strMetaData.c_str(),len);
@@ -602,6 +618,10 @@ int CConnRtmp::doTransmission()
 	{
 		misAddConn = true;
 		makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
+	}
+	if (ret == 1)
+	{
+		mtimeoutTick = getTimeUnix();
 	}
 	return ret;
 }
