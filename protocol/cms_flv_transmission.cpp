@@ -242,7 +242,7 @@ int CFlvTransmission::doTransmission()
 					}
 					char *d = NULL;
 					int32 dLen = 0;
-					if (CFlvPool::instance()->mergeKeyFrame(fs->mData,fs->miDataLen,s->mData,s->miDataLen,d,dLen,mprotocol->getUrl()))
+					if (CFlvPool::instance()->mergeKeyFrame(fs->mData,fs->miDataLen,s->mData,s->miDataLen,&d,dLen,mprotocol->getUrl()))
 					{
 						ss = new Slice;
 						ss->mData = d;
