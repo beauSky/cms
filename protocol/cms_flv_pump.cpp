@@ -98,6 +98,7 @@ int	CFlvPump::decodeMetaData(char *data,int len,bool &isChangeMediaInfo)
 		miAudioSamplerate = atoi(rate.c_str()); 
 		miAudioFrameRate = ::getAudioFrameRate(miAudioSamplerate);
 	}
+	amf0::amf0BlockRelease(block);
 
 	mjitter->setVideoFrameRate(miVideoFrameRate);
 	mjitter->setAudioFrameRate(miAudioFrameRate);

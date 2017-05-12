@@ -52,6 +52,14 @@ CFlvTransmission::~CFlvTransmission()
 	{
 		delete mfastBitRate;
 	}
+	if (mdurationtt)
+	{
+		delete mdurationtt;
+	}
+	if (mfirstPlay)
+	{
+		delete mfirstPlay;
+	}
 }
 
 void CFlvTransmission::setHash(uint32 hashIdx,HASH &hash)

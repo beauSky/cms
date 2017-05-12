@@ -1434,7 +1434,7 @@ bool CFlvPool::isTimeout(uint32 i,HASH &hash)
 	return false;
 }
 
-bool CFlvPool::mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char *src,int32 &srcLen,std::string url)
+bool CFlvPool::mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char **src,int32 &srcLen,std::string url)
 {
 	logs->debug(">>>>[mergeKeyFrame] meger desc frame and key frame video %s", url.c_str());
 	if (descLen < 16 || keyLen < 11 )
@@ -1466,8 +1466,8 @@ bool CFlvPool::mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char *s
 	int32 descData2Len = tagLen2;
 
 	srcLen = 4+4+descData1Len+4+descData2Len+(keyLen-4);
-	src = new char[srcLen];
-	char *p = src;
+	*src = new char[srcLen];
+	char *p = *src;
 	memcpy(p,key,4);
 	p += 4;
 	*p++ = char(tagLen1 >> 24);
@@ -1483,6 +1483,6 @@ bool CFlvPool::mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char *s
 	memcpy(p,descData2,descData2Len);
 	p += descData2Len;
 	memcpy(p,key+4,keyLen-4);
-	src[1] = 0x01;
+	(*src)[1] = 0x01;
 	return true;
 }

@@ -255,7 +255,7 @@ public:
 	std::string readCodeSuffix(uint32 i,HASH &hash);
 
 	bool seekKeyFrame(uint32 i,HASH &hash,uint32 &tt,int64 &transIdx);
-	bool mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char *src,int32 &srcLen,std::string url);
+	bool mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char **src,int32 &srcLen,std::string url);
 	int64  getCacheTT(uint32 i,HASH &hash);
 	uint32 getKeyFrameDistance(uint32 i,HASH &hash);
 	int	   getAutoBitRateFactor(uint32 i,HASH &hash);
