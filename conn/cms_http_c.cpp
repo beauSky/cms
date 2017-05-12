@@ -147,6 +147,16 @@ ChttpClient::~ChttpClient()
 
 int ChttpClient::doit()
 {
+	if (!mhttp->run())
+	{
+		return CMS_ERROR;
+	}
+	if (!CTaskMgr::instance()->pullTaskAdd(mHash,this))
+	{
+		logs->debug("***%s [ChttpClient::doit] http %s task is exist ***",
+			mremoteAddr.c_str(),murl.c_str());
+		return CMS_ERROR;
+	}	
 	return CMS_OK;
 }
 
@@ -159,7 +169,7 @@ int ChttpClient::handleEv(FdEvents *fe)
 
 	if (fe->events & EventWrite || fe->events & EventWait2Write)
 	{
-		if (fe->events & EventWait2Write && fe->watcherCmsTimer !=  mhttp->cmsTimer2Write())
+		if (fe->events & EventWait2Write && fe->watcherWCmsTimer !=  mhttp->cmsTimer2Write())
 		{
 			//应该是旧的socket号的消息
 			return CMS_OK;
@@ -173,12 +183,17 @@ int ChttpClient::handleEv(FdEvents *fe)
 	}
 	if (fe->events & EventRead || fe->events & EventWait2Read)
 	{
-		if (fe->events & EventRead && mwatcherReadIO != fe->watcherReadIO)
+		if (fe->events & EventWait2Read && fe->watcherRCmsTimer !=  mhttp->cmsTimer2Read())
 		{
 			//应该是旧的socket号的消息
 			return CMS_OK;
 		}
-		return doRead();
+		else if (fe->events & EventRead && mwatcherReadIO != fe->watcherReadIO)
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
+		return doRead(fe->events & EventWait2Read);
 	}
 	if (fe->events & EventErrot)
 	{
@@ -456,9 +471,9 @@ int ChttpClient::sendBefore(const char *data,int len)
 	return CMS_OK;
 }
 
-int ChttpClient::doRead()
+int ChttpClient::doRead(bool isTimeout)
 {
-	return mhttp->want2Read();
+	return mhttp->want2Read(isTimeout);
 }
 
 int ChttpClient::doWrite(bool isTimeout)

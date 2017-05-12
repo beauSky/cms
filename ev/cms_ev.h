@@ -44,8 +44,8 @@ void atomicDec(cms_timer *ct);
 cms_timer *mallcoCmsTimer();
 void	   freeCmsTimer(cms_timer *ct);
 
-void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb);
-void cms_timer_start(cms_timer *ct);
+void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb,bool isWrite = true);
+void cms_timer_start(cms_timer *ct,bool isWrite = true);
 void wait2ReadEV(void *t);
 void wait2WriteEV(void *t);
 void justTickEV(struct ev_loop *loop,struct ev_timer *watcher,int revents);

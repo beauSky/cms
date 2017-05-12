@@ -213,13 +213,13 @@ bool CNetDispatch::nonblocking(int fd)
 	opts = fcntl(fd, F_GETFL);
 	if (opts < 0)
 	{
-		logs->error("***** sock[ %d ] fcntl(sock,GETFL) *****\n",fd);
+		logs->error("***** sock[ %d ] fcntl(sock,GETFL) *****",fd);
 		return false;
 	}
 	opts = opts | O_NONBLOCK;
 	if (fcntl(fd, F_SETFL, opts) < 0)
 	{
-		logs->error("***** sock[ %d ] fcntl(sock,SETFL,opts) *****\n",fd);
+		logs->error("***** sock[ %d ] fcntl(sock,SETFL,opts) *****",fd);
 		return false;
 	}
 	return true;

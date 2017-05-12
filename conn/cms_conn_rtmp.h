@@ -87,7 +87,7 @@ private:
 	int  decodeVideo(RtmpMessage *msg,bool &isSave);
 	int  decodeAudio(RtmpMessage *msg,bool &isSave);
 	int  decodeVideoAudio(RtmpMessage *msg);
-	int	 doRead();
+	int	 doRead(bool isTimeout);
 	int	 doWrite(bool isTimeout);
 	void makeHash();
 	void makePushHash();

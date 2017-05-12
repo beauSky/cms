@@ -440,6 +440,11 @@ CHttp::~CHttp()
 		//别的地方可能还在使用，不能直接delete
 		freeCmsTimer(mcmsWriteTimeout);
 	}
+	if (mcmsReadTimeout)
+	{
+		//别的地方可能还在使用，不能直接delete
+		freeCmsTimer(mcmsReadTimeout);
+	}
 	if (mrequest)
 	{
 		delete mrequest;
@@ -478,11 +483,18 @@ bool CHttp::run()
 	{
 
 	}
+	doReadTimeout();
 	return true;
 }
 
-int CHttp::want2Read()
+int CHttp::want2Read(bool isTimeout)
 {	
+	if (isTimeout)
+	{
+		assert(mcmsReadTimeOutDo==1);
+		mcmsReadTimeOutDo--;
+		doReadTimeout();
+	}
 	int ret = 0;
 	for (;!misReadHeader;)
 	{		
@@ -1147,6 +1159,26 @@ void CHttp::doWriteTimeout()
 	}
 }
 
+void CHttp::doReadTimeout()
+{
+	if (mcmsReadTimeout == NULL)
+	{
+		mcmsReadTimeout = mallcoCmsTimer();
+		cms_timer_init(mcmsReadTimeout,mrw->fd(),wait2ReadEV,false);
+		assert(mcmsReadTimeOutDo == 0);
+		mcmsReadTimeOutDo++;
+		cms_timer_start(mcmsReadTimeout,false);
+	}
+	else
+	{
+		if (mcmsReadTimeOutDo == 0)
+		{
+			mcmsReadTimeOutDo++;
+			cms_timer_start(mcmsReadTimeout,false);			
+		}		
+	}
+}
+
 Request *CHttp::httpRequest()
 {
 	return mrequest;
@@ -1166,3 +1198,7 @@ cms_timer *CHttp::cmsTimer2Write()
 	return mcmsWriteTimeout;
 }
 
+cms_timer *CHttp::cmsTimer2Read()
+{
+	return mcmsReadTimeout;
+}

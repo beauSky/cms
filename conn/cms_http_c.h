@@ -73,7 +73,7 @@ public:
 	int doTransmission();
 	int sendBefore(const char *data,int len);
 
-	int doRead();
+	int doRead(bool isTimeout);
 	int doWrite(bool isTimeout);
 
 private:

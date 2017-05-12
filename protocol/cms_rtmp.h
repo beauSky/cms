@@ -47,7 +47,8 @@ public:
 		CBufferWriter *wr,CReaderWriter *rw,std::string remoteAddr);
 	~CRtmpProtocol();
 
-	int want2Read();
+	bool        run();
+	int want2Read(bool isTimeout);
 	int want2Write(bool isTimeout);
 	int wait2Read();
 	int wait2Write();
@@ -67,6 +68,7 @@ public:
 
 	void shouldCloseNodelay();
 	cms_timer *cmsTimer2Write();
+	cms_timer *cmsTimer2Read();
 private:
 	//Œ’ ÷
 	int handShake();

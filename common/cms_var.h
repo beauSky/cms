@@ -43,6 +43,7 @@ struct FdEvents
 	struct ev_io *watcherReadIO;
 	struct ev_io *watcherWriteIO;
 	struct ev_timer *watcherTimeout;
-	struct _cms_timer *watcherCmsTimer;
+	struct _cms_timer *watcherWCmsTimer;
+	struct _cms_timer *watcherRCmsTimer;
 };
 #endif

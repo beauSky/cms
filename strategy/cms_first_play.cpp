@@ -80,7 +80,7 @@ bool CFirstPlay::checkfirstPlay()
 			mfirstPlaySkipMilSecond = 0;
 		}
 		beginTT = getTimeUnix();
-		logs->debug(">>>%s %s first play task %s firstPlaySkipMilSecond=%d,distanceKeyFrame=%lu",
+		logs->debug(">>>%s %s first play task %s firstPlaySkipMilSecond=%d,distanceKeyFrame=%d",
 			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 			mfirstPlaySkipMilSecond,mdistanceKeyFrame);
 	}	
@@ -92,7 +92,7 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 	if (!(mfirstPlaySkipMilSecond > 0 && transIdx == -1 &&
 		s->mData[0] == 0x17 && CFlvPool::instance()->isH264(mhashIdx,mhash) &&
 		CFlvPool::instance()->getMediaRate(mhashIdx,mhash) > FIRST_DROP_MEDIA_RATE))
-	{
+	{		
 		return true;
 	}
 	if (getTimeUnix() - beginTT > 3)
@@ -117,11 +117,11 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 		mvideoFrameRate,maudioFrameRate);
 	if (mfirstPlaySkipMilSecond < mdistanceKeyFrame)
 	{
-		mdropSliceNum = (mvideoFrameRate+maudioFrameRate)*mfirstPlaySkipMilSecond/1000;
-		logs->debug(">>>%s %s first play task %s should drop slice num %d",
-			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
-			mdropSliceNum);
+		mdropSliceNum = (mvideoFrameRate+maudioFrameRate)*mfirstPlaySkipMilSecond/1000;		
 		int64 minIdx = CFlvPool::instance()->getMinIdx(mhashIdx,mhash);
+		logs->debug(">>>%s %s first play task %s should drop slice num %d,minIdx=%lld,s->mllIndex=%lld",
+			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
+			mdropSliceNum,minIdx,s->mllIndex);
 		if (s->mllIndex-minIdx > (int64)mdropSliceNum)
 		{
 			transIdx = s->mllIndex-(int64)mdropSliceNum-1;
@@ -135,7 +135,12 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 		{
 			transIdx = minIdx+20-1;
 			mdropSliceNum = (int32)(s->mllIndex-minIdx-20);
-		}		
+		}
+		if (mdropSliceNum <= 0)
+		{
+			transIdx = -1;
+			return true;
+		}
 	}
 	else
 	{
@@ -144,7 +149,15 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 		logs->debug(">>>%s %s first play task %s should drop slice num %d",
 			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 			mdropSliceNum);
-		transIdx = s->mllIndex+(int64)mdropSliceNum+10;
+		if (mdropSliceNum > 0)
+		{
+			transIdx = s->mllIndex+(int64)mdropSliceNum+10;
+		}
+		else
+		{
+			mdropSliceNum = 0;
+			return true;
+		}
 	}
 	return false;
 }
@@ -152,7 +165,7 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 bool CFirstPlay::needDropFrame(Slice *s)
 {
 	bool needDrop = false;
-	if (mfirstPlaySkipMilSecond > 0)
+	if (s->miDataType == DATA_TYPE_VIDEO && mfirstPlaySkipMilSecond > 0 && misSetFirstFrame)
 	{
 		if (!((misSetFirstFrame &&
 			mhaveDropSliceNum < mdropSliceNum-5) ||
@@ -160,6 +173,9 @@ bool CFirstPlay::needDropFrame(Slice *s)
 			mhaveDropSliceNum >= mdropSliceNum-5 &&
 			s->mData[0] != 0x17))) 
 		{
+			logs->debug(">>>%s %s first play task %s 11 should drop slice num %d,have drop %d",
+				mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
+				mdropSliceNum,mhaveDropSliceNum);
 			misSetFirstFrame = false;
 		}
 		else
@@ -168,10 +184,14 @@ bool CFirstPlay::needDropFrame(Slice *s)
 			if (mdistanceKeyFrame > mfirstPlaySkipMilSecond &&
 				s->mData[0] == 0x17)
 			{
+				logs->debug(">>>%s %s first play task %s 22 should drop slice num %d,have drop %d",
+					mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
+					mdropSliceNum,mhaveDropSliceNum);
 				misSetFirstFrame = false;
 			}
 			else
 			{
+				mhaveDropSliceNum++;
 				needDrop = true;
 			}
 		}

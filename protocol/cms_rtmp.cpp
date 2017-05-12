@@ -131,6 +131,17 @@ CRtmpProtocol::~CRtmpProtocol()
 		//别的地方可能还在使用，不能直接delete
 		freeCmsTimer(mcmsWriteTimeout);
 	}
+	if (mcmsReadTimeout)
+	{
+		//别的地方可能还在使用，不能直接delete
+		freeCmsTimer(mcmsReadTimeout);
+	}
+}
+
+bool CRtmpProtocol::run()
+{
+	doReadTimeout();
+	return true;
 }
 
 int CRtmpProtocol::handShake()
@@ -497,8 +508,13 @@ int CRtmpProtocol::s2cSampleShakeC012()
 	return CMS_OK;
 }
 
-int CRtmpProtocol::want2Read()
+int CRtmpProtocol::want2Read(bool isTimeout)
 {
+	if (isTimeout)
+	{
+		assert(mcmsReadTimeOutDo==1);
+		mcmsReadTimeOutDo--;
+	}
 	if (!mfinishShake)
 	{
 		if (handShake() == CMS_ERROR)
@@ -2854,6 +2870,26 @@ void CRtmpProtocol::doWriteTimeout()
 	}
 }
 
+void CRtmpProtocol::doReadTimeout()
+{
+	if (mcmsReadTimeout == NULL)
+	{
+		mcmsReadTimeout = mallcoCmsTimer();
+		cms_timer_init(mcmsReadTimeout,mrw->fd(),wait2ReadEV,false);
+		assert(mcmsReadTimeOutDo == 0);
+		mcmsReadTimeOutDo++;
+		cms_timer_start(mcmsReadTimeout,false);
+	}
+	else
+	{
+		if (mcmsReadTimeOutDo == 0)
+		{
+			mcmsReadTimeOutDo++;
+			cms_timer_start(mcmsReadTimeout,false);			
+		}		
+	}
+}
+
 void CRtmpProtocol::shouldCloseNodelay()
 {
 	if (!misCloseNodelay && mulNodelayEndTime > 0)
@@ -2896,4 +2932,9 @@ string CRtmpProtocol::getRtmpType()
 cms_timer *CRtmpProtocol::cmsTimer2Write()
 {
 	return mcmsWriteTimeout;
+}
+
+cms_timer *CRtmpProtocol::cmsTimer2Read()
+{
+	return mcmsReadTimeout;
 }

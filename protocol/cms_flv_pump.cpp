@@ -66,7 +66,7 @@ int	CFlvPump::decodeMetaData(char *data,int len,bool &isChangeMediaInfo)
 	amf0::Amf0Block *block = NULL;
 	block = amf0::amf0Parse(data,len);	
 	std::string strRtmpContent = amf0::amf0BlockDump(block);
-	logs->info("%s [ChttpClient::decodeMetaData] http %s received metaData: %s",
+	logs->info("%s [CFlvPump::decodeMetaData] http %s received metaData: %s",
 		mremoteAddr.c_str(),murl.c_str(),strRtmpContent.c_str());
 	string strRtmpData = amf0::amf0Block2String(block);
 
@@ -103,8 +103,8 @@ int	CFlvPump::decodeMetaData(char *data,int len,bool &isChangeMediaInfo)
 	mjitter->setAudioFrameRate(miAudioFrameRate);
 
 	isChangeMediaInfo = true;
-	logs->info("%s [CFlvPump::decodeMetaData] http %s stream media rate=%d,width=%d,height=%d,video framerate=%d,audio samplerate=%d,audio framerate=%d",
-		mremoteAddr.c_str(),murl.c_str(),strRtmpContent.c_str(),miMediaRate,miWidth,miHeight,miVideoFrameRate,miAudioSamplerate,miAudioFrameRate);
+	logs->info("%s [CFlvPump::decodeMetaData] %s stream media rate=%d,width=%d,height=%d,video framerate=%d,audio samplerate=%d,audio framerate=%d",
+		mremoteAddr.c_str(),murl.c_str(),miMediaRate,miWidth,miHeight,miVideoFrameRate,miAudioSamplerate,miAudioFrameRate);
 
 	Slice *s = newSlice();
 	if (isChangeMediaInfo)
@@ -148,12 +148,12 @@ int CFlvPump::decodeVideo(char *data,int len,uint32 timestamp,bool &isChangeMedi
 	{
 		if (mvideoType == 0xFF)
 		{
-			logs->info("%s [CFlvPump::decodeVideo] http %s first video type %s",
+			logs->info("%s [CFlvPump::decodeVideo] %s first video type %s",
 				mremoteAddr.c_str(),murl.c_str(),::getVideoType(vType).c_str());
 		}
 		else
 		{
-			logs->info("%s [CFlvPump::decodeVideo] http %s first video type change,old type %s,new type %s",
+			logs->info("%s [CFlvPump::decodeVideo] %s first video type change,old type %s,new type %s",
 				mremoteAddr.c_str(),murl.c_str(),::getVideoType(mvideoType).c_str(),::getVideoType(vType).c_str());
 		}
 		mvideoType = vType;
@@ -237,12 +237,12 @@ int CFlvPump::decodeAudio(char *data,int len,uint32 timestamp,bool &isChangeMedi
 	{
 		if (maudioType == 0xFF)
 		{
-			logs->info("%s [CFlvPump::decodeAudio] http %s first audio type %s",
+			logs->info("%s [CFlvPump::decodeAudio] %s first audio type %s",
 				mremoteAddr.c_str(),murl.c_str(),::getAudioType(aType).c_str());
 		}
 		else
 		{
-			logs->info("%s [CFlvPump::decodeAudio] http %s first audio type change,old type %s,new type %s",
+			logs->info("%s [CFlvPump::decodeAudio] %s first audio type change,old type %s,new type %s",
 				mremoteAddr.c_str(),murl.c_str(),::getAudioType(maudioType).c_str(),::getAudioType(aType).c_str());
 		}
 		maudioType = aType;
@@ -272,7 +272,7 @@ int CFlvPump::decodeAudio(char *data,int len,uint32 timestamp,bool &isChangeMedi
 			{
 				miAudioSamplerate = ::getAudioSampleRates(data);
 				miAudioFrameRate = ::getAudioFrameRate(miAudioSamplerate);
-				logs->info("%s [CFlvPump::decodeAudio] http %s audio sampleRate=%d,audio frame rate=%d",
+				logs->info("%s [CFlvPump::decodeAudio] %s audio sampleRate=%d,audio frame rate=%d",
 					mremoteAddr.c_str(),murl.c_str(),miAudioSamplerate,miAudioFrameRate);
 			}
 		}

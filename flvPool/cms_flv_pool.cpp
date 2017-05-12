@@ -808,7 +808,7 @@ int  CFlvPool::getFirstPlaySkipMilSecond(uint32 i,HASH &hash)
 	return milSecond;
 }
 
-uint32  CFlvPool::getDistanceKeyFrame(uint32 i,HASH &hash)
+uint32 CFlvPool::getDistanceKeyFrame(uint32 i,HASH &hash)
 {
 	uint32 distanceKeyFrame = 0;
 	mhashSliceLock[i].RLock();

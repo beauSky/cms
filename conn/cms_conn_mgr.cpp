@@ -95,7 +95,8 @@ void  CConnMgr::pushEv(int fd,int events,struct ev_loop *loop,struct ev_io *watc
 	fe->watcherReadIO = watcherRead;
 	fe->watcherWriteIO = watcherWrite;
 	fe->watcherTimeout = watcherTimeout;
-	fe->watcherCmsTimer = NULL;
+	fe->watcherWCmsTimer = NULL;
+	fe->watcherRCmsTimer = NULL;
 	mqueueLock.Lock();
 	mqueue.push(fe);
 	mqueueLock.Unlock();
@@ -110,7 +111,16 @@ void CConnMgr::pushEv(int fd,int events,cms_timer *ct)
 	fe->watcherReadIO = NULL;
 	fe->watcherWriteIO = NULL;
 	fe->watcherTimeout = NULL;
-	fe->watcherCmsTimer = ct;
+	if (events == EventWait2Read)
+	{
+		fe->watcherWCmsTimer = NULL;
+		fe->watcherRCmsTimer = ct;
+	}
+	else if (events == EventWait2Write)
+	{
+		fe->watcherWCmsTimer = ct;
+		fe->watcherRCmsTimer = NULL;
+	}
 	mqueueLock.Lock();
 	mqueue.push(fe);
 	mqueueLock.Unlock();
@@ -168,10 +178,15 @@ void CConnMgr::thread()
 		{
 			assert(fe != NULL);
 			dispatchEv(fe);
-			if (fe->watcherCmsTimer)
+			if (fe->watcherWCmsTimer)
 			{
 				//如果不为空，加数器需要减1
-				atomicDec(fe->watcherCmsTimer);
+				atomicDec(fe->watcherWCmsTimer);
+			}
+			if (fe->watcherRCmsTimer)
+			{
+				//如果不为空，加数器需要减1
+				atomicDec(fe->watcherRCmsTimer);
 			}
 			delete fe;
 		}

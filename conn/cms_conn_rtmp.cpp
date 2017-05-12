@@ -148,6 +148,16 @@ int CConnRtmp::doit()
 			misPush = true;
 		}
 	}
+	else if (mrtmpType == RtmpClient2Play)
+	{
+		if (!CTaskMgr::instance()->pullTaskAdd(mpushHash,this))
+		{
+			logs->warn("######### %s [CConnRtmp::doit] %s rtmp %s pull task is exist %s ",
+				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),mstrPushUrl.c_str());
+			return CMS_ERROR;
+		}
+	}
+	mrtmp->run();
 	return CMS_OK;
 }
 
@@ -199,7 +209,7 @@ int CConnRtmp::handleEv(FdEvents *fe)
 	
 	if (fe->events & EventWrite || fe->events & EventWait2Write)
 	{
-		if (fe->events & EventWait2Write && fe->watcherCmsTimer !=  mrtmp->cmsTimer2Write())
+		if (fe->events & EventWait2Write && fe->watcherWCmsTimer !=  mrtmp->cmsTimer2Write())
 		{
 			//应该是旧的socket号的消息
 			return CMS_OK;
@@ -213,12 +223,17 @@ int CConnRtmp::handleEv(FdEvents *fe)
 	}
 	if (fe->events & EventRead || fe->events & EventWait2Read)
 	{
-		if (fe->events & EventRead && mwatcherReadIO != fe->watcherReadIO)
+		if (fe->events & EventWait2Read && fe->watcherRCmsTimer !=  mrtmp->cmsTimer2Read())
 		{
 			//应该是旧的socket号的消息
 			return CMS_OK;
 		}
-		return doRead();
+		else if (fe->events & EventRead && mwatcherReadIO != fe->watcherReadIO)
+		{
+			//应该是旧的socket号的消息
+			return CMS_OK;
+		}
+		return doRead(fe->events & EventWait2Read);
 	}
 	if (fe->events & EventJustTick)
 	{
@@ -233,11 +248,11 @@ int CConnRtmp::handleEv(FdEvents *fe)
 	return CMS_OK;
 }
 
-int CConnRtmp::doRead()
+int CConnRtmp::doRead(bool isTimeout)
 {
 	//logs->debug("%s [CConnRtmp::doRead] rtmp %s doRead",
 	//	mremoteAddr.c_str(),mrtmp->getRtmpType().c_str());
-	return mrtmp->want2Read();
+	return mrtmp->want2Read(isTimeout);
 }
 
 int CConnRtmp::doWrite(bool isTimeout)

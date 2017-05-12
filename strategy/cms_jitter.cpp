@@ -317,8 +317,8 @@ bool CJitter::countVideoAudioFrame(bool isVideo,int64 tk,uint32 absoluteTimestam
 			}
 			if (tk > 60)
 			{
-				mvideoJitterCountFrameRate /= 30;
-				logs->debug(">>>%s %s jitter task %s video statistics frame rate %d,frame rate %d",
+				mvideoJitterCountFrameRate /= tk;
+				logs->debug(">>>%s %s jitter task %s video statistics frame rate %.02f,frame rate %.02f",
 					mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),mvideoJitterCountFrameRate, mvideoJitterFrameRate);
 				int32 num = (int32)(mvideoJitterCountFrameRate - mvideoJitterFrameRate);
 				num = abs(num);
@@ -345,8 +345,8 @@ bool CJitter::countVideoAudioFrame(bool isVideo,int64 tk,uint32 absoluteTimestam
 			}
 			if (tk > 60)
 			{
-				maudioJitterCountFrameRate /= 30;
-				logs->debug(">>>%s %s jitter task %s audio statistics frame rate %d,frame rate %d",
+				maudioJitterCountFrameRate /= tk;
+				logs->debug(">>>%s %s jitter task %s audio statistics frame rate %.02f,frame rate %.02f",
 					mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),maudioJitterCountFrameRate, maudioJitterFrameRate);
 				int32 num = (int32)(maudioJitterCountFrameRate - maudioJitterFrameRate);
 				num = abs(num);

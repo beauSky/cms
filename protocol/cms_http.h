@@ -96,7 +96,7 @@ public:
 	~CHttp();
 
 	bool        run();
-	int			want2Read();
+	int			want2Read(bool isTimeout);
 	int			want2Write(bool isTimeout);
 	int         read(char **data,int &len);			//数据保存在*data中，读取指定长度的数据len，如果没有足够数据则返回0
 													//，读完之后要马上处理，没处理前不能再次read，否则可能出现不可预测的错误
@@ -115,8 +115,10 @@ public:
 	void syncIO();
 	void setChunked();
 	cms_timer *cmsTimer2Write();
+	cms_timer *cmsTimer2Read();
 private:
 	void		doWriteTimeout();
+	void		doReadTimeout();
 	int 		readChunkedRN();		
 	//tls 的东西
 	bool			misTls;

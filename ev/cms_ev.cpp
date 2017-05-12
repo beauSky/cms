@@ -34,10 +34,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace std;
 
 #define TIME_OUT_MIL_SECOND	10
-queue<cms_timer *> gqueueT;
-CLock gqueueL;
-bool  gqueueR = false;
-cms_thread_t gqueueTT;
+#define TIME_IN_MIL_SECOND	1000
+//写超时
+queue<cms_timer *> gqueueWT;
+CLock gqueueWL;
+bool  gqueueWR = false;
+cms_thread_t gqueueWTT;
+//读超时
+queue<cms_timer *> gqueueRT;
+CLock gqueueRL;
+bool  gqueueRR = false;
+cms_thread_t gqueueRTT;
 
 void atomicInc(cms_timer *ct)
 {
@@ -83,9 +90,9 @@ int event2event(int revents)
 	return event;
 }
 
-void *cms_timer_thread(void *param)
+void *cms_timer_Write_thread(void *param)
 {
-	logs->info("##### cms_timer_thread enter #####");
+	logs->info("##### cms_timer_Write_thread enter thread=%d ###", gettid());
 	cms_timer *ct;
 	bool is;
 	long long  mils = 0;
@@ -95,22 +102,22 @@ void *cms_timer_thread(void *param)
 		is = false;
 		mils = 1;
 		
-		gqueueL.Lock();
-		if (!gqueueT.empty())
+		gqueueWL.Lock();
+		if (!gqueueWT.empty())
 		{
 			t = (long long)getTickCount();			
-			ct = gqueueT.front();
+			ct = gqueueWT.front();
 			if (t > ct->tick+mils-1)
 			{
 				is = true;				
-				gqueueT.pop();
-				if (!gqueueT.empty()) //看需要休眠多长时间
+				gqueueWT.pop();
+				if (!gqueueWT.empty()) //看需要休眠多长时间
 				{
-					mils = gqueueT.front()->tick - t;
+					mils = gqueueWT.front()->tick - t;
 				}
 			}				
 		}
-		gqueueL.Unlock();
+		gqueueWL.Unlock();
 
 		if (is)
 		{
@@ -120,31 +127,95 @@ void *cms_timer_thread(void *param)
 		{
 			cmsSleep(mils);
 		}
-	} while (gqueueR);
-	logs->info("##### cms_timer_thread leave #####");
+	} while (gqueueWR);
+	logs->info("##### cms_timer_Write_thread leave thread=%d ###", gettid());
 	return NULL;
 }
 
-void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb)
+void *cms_timer_read_thread(void *param)
+{
+	logs->info("##### cms_timer_read_thread enter thread=%d ###", gettid());
+	cms_timer *ct;
+	bool is;
+	long long  mils = 0;
+	long long t;
+	do 
+	{
+		is = false;
+		mils = 500;
+
+		gqueueRL.Lock();
+		if (!gqueueRT.empty())
+		{
+			t = (long long)getTickCount();			
+			ct = gqueueRT.front();
+			if (t > ct->tick+mils-1)
+			{
+				is = true;				
+				gqueueRT.pop();
+				if (!gqueueRT.empty()) //看需要休眠多长时间
+				{
+					mils = gqueueRT.front()->tick - t;
+				}
+			}				
+		}
+		gqueueRL.Unlock();
+
+		if (is)
+		{
+			ct->cb(ct);
+		}
+		if (mils > 0)
+		{
+			cmsSleep(mils);
+		}
+	} while (gqueueRR);
+	logs->info("##### cms_timer_read_thread leave thread=%d ###", gettid());
+	return NULL;
+}
+
+void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb,bool isWrite/* = true*/)
 {
 	assert(ct != NULL);
 	ct->fd = fd;
 	ct->cb = cb;
-	ct->tick = (long long)getTickCount()+TIME_OUT_MIL_SECOND;
+	if (isWrite)
+	{
+		ct->tick = (long long)getTickCount()+TIME_OUT_MIL_SECOND;
+	}
+	else
+	{
+		ct->tick = (long long)getTickCount()+TIME_IN_MIL_SECOND;
+	}
 }
 
-void cms_timer_start(cms_timer *ct)
+void cms_timer_start(cms_timer *ct,bool isWrite/* = true*/)
 {
-	ct->tick = (long long)getTickCount()+TIME_OUT_MIL_SECOND;
 	atomicInc(ct); //投递使用，计数器加1
-	gqueueL.Lock();
-	if (!gqueueR)
+	if (isWrite)
 	{
-		gqueueR = true;
-		cmsCreateThread(&gqueueTT,cms_timer_thread,NULL,true);		
+		ct->tick = (long long)getTickCount()+TIME_OUT_MIL_SECOND;
+		gqueueWL.Lock();
+		if (!gqueueWR)
+		{
+			gqueueWR = true;
+			cmsCreateThread(&gqueueWTT,cms_timer_Write_thread,NULL,true);		
+		}
+		gqueueWT.push(ct);
+		gqueueWL.Unlock();
 	}
-	gqueueT.push(ct);
-	gqueueL.Unlock();
+	else
+	{
+		ct->tick = (long long)getTickCount()+TIME_IN_MIL_SECOND;
+		gqueueRL.Lock();
+		if (!gqueueRR)
+		{
+			gqueueRR = true;
+			cmsCreateThread(&gqueueRTT,cms_timer_Write_thread,NULL,true);		
+		}
+		gqueueRT.push(ct);
+		gqueueRL.Unlock();
+	}	
 }
 
 void acceptEV(struct ev_loop *loop,struct ev_io *watcher,int revents)
@@ -182,5 +253,5 @@ void justTickEV(struct ev_loop *loop,struct ev_timer *watcher,int revents)
 
 void timerTick(struct ev_loop *loop,struct ev_timer *watcher,int revents)
 {
-	printf(">>>>>timer tick.\n");
+	//printf(">>>>>timer tick.\n");
 }

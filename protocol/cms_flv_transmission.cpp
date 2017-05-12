@@ -211,9 +211,9 @@ int CFlvTransmission::doTransmission()
 				if (!mfirstPlay->checkShouldDropFrameCount(mllTransIdx,s))
 				{
 					ret = 0;
-					break;
+					continue;
 				}
-				needSend = !mfirstPlay->needDropFrame(s);
+				needSend = !mfirstPlay->needDropFrame(s);				
 				//Ê×²¥¶ªÖ¡ ½áÊø
 				isVideo = s->miDataType == DATA_TYPE_VIDEO;
 				isAudio = s->miDataType == DATA_TYPE_AUDIO;
