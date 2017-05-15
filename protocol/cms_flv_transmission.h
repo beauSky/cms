@@ -40,7 +40,7 @@ public:
 	~CFlvTransmission();
 	void setHash(uint32 hashIdx,HASH &hash);
 	void setWaterMarkHash(uint32 hashIdx,HASH &hash);
-	int  doTransmission();
+	int  doTransmission(bool &isSendData);
 private:
 	int  doMetaData();
 	int  doFirstVideoAudio(bool isVideo);

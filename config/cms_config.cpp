@@ -60,12 +60,12 @@ CAddr::~CAddr()
 {
 	if (mAddr)
 	{
-		delete []mAddr;
+		delete[] mAddr;
 		mAddr = NULL;
 	}
 	if (mHost)
 	{
-		delete []mHost;
+		delete[] mHost;
 		mAddr = NULL;
 	}
 }
@@ -140,7 +140,7 @@ Clog::~Clog()
 {
 	if (mpath)
 	{
-		delete []mpath;
+		delete[] mpath;
 		mpath = NULL;
 	}
 }

@@ -486,14 +486,15 @@ int CHttpServer::doTransmission()
 	int ret = 1;
 	if (misFlvRequest)
 	{
-		ret = mflvTrans->doTransmission();
-		if (ret == 1 && !misAddConn)
+		bool isSendData = false;
+		ret = mflvTrans->doTransmission(isSendData);
+		if (!misAddConn && (ret == 1 || ret == 0))
 		{
 			misAddConn = true;
 			makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 			down8upBytes();
 		}
-		if (ret == 1)
+		if (isSendData)
 		{
 			mtimeoutTick = getTimeUnix();
 		}

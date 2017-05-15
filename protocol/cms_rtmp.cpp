@@ -96,9 +96,9 @@ CRtmpProtocol::~CRtmpProtocol()
 			{
 				if (itIn->second->currentMessage->buffer != NULL)
 				{
-					delete []itIn->second->currentMessage->buffer;
+					delete[] itIn->second->currentMessage->buffer;
 				}
-				itIn->second->currentMessage;
+				delete itIn->second->currentMessage;
 			}
 			delete itIn->second;
 		}
@@ -119,7 +119,7 @@ CRtmpProtocol::~CRtmpProtocol()
 	}
 	if (mps1)
 	{
-		delete []mps1;
+		delete[] mps1;
 		mps1 = NULL;
 	}
 	if (mcmsReadTimeout)
@@ -514,6 +514,9 @@ int CRtmpProtocol::want2Read(bool isTimeout)
 	{
 		assert(mcmsReadTimeOutDo==1);
 		mcmsReadTimeOutDo--;
+		doReadTimeout();
+		//不能往下处理数据
+		return CMS_OK;
 	}
 	if (!mfinishShake)
 	{
@@ -1089,7 +1092,7 @@ int CRtmpProtocol::readRtmpPlayload(RtmpHeader &header,int fmt,int cid,int &hand
 		//重新开辟空间
 		if (pIncs->lastHeader->msgLength > 0 && pMsg->bufLen < pIncs->lastHeader->msgLength)
 		{
-			delete []pMsg->buffer;
+			delete[] pMsg->buffer;
 			pMsg->bufLen = pIncs->lastHeader->msgLength;
 			pMsg->buffer = new char[pMsg->bufLen];
 		}

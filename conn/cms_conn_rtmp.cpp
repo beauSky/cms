@@ -446,7 +446,7 @@ int CConnRtmp::decodeMessage(RtmpMessage *msg)
 	}
 	if (!isSave)
 	{
-		delete []msg->buffer;
+		delete[] msg->buffer;
 		msg->buffer = NULL;
 		msg->bufLen = 0;
 	}
@@ -618,13 +618,14 @@ int CConnRtmp::decodeSetDataFrame(amf0::Amf0Block *block)
 
 int CConnRtmp::doTransmission()
 {
-	int ret = mflvTrans->doTransmission();
-	if (ret == 1 && !misAddConn)
+	bool isSendData = false;
+	int ret = mflvTrans->doTransmission(isSendData);
+	if (!misAddConn && (ret == 1 || ret == 0))
 	{
 		misAddConn = true;
 		makeOneTaskupload(mHash,0,PACKET_CONN_ADD);
 	}
-	if (ret == 1)
+	if (isSendData)
 	{
 		mtimeoutTick = getTimeUnix();
 	}

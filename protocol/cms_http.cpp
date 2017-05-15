@@ -494,6 +494,8 @@ int CHttp::want2Read(bool isTimeout)
 		assert(mcmsReadTimeOutDo==1);
 		mcmsReadTimeOutDo--;
 		doReadTimeout();
+		//不能往下处理数据
+		return CMS_OK;
 	}
 	int ret = 0;
 	for (;!misReadHeader;)

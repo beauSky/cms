@@ -107,7 +107,7 @@ void *cms_timer_write_thread(void *param)
 		{
 			t = (long long)getTickCount();			
 			ct = gqueueWT.front();
-			if (t > ct->tick+mils-1)
+			if (t > ct->tick/*+mils-1*/)
 			{
 				is = true;				
 				gqueueWT.pop();
@@ -149,7 +149,7 @@ void *cms_timer_read_thread(void *param)
 		{
 			t = (long long)getTickCount();			
 			ct = gqueueRT.front();
-			if (t > ct->tick+mils-1)
+			if (t > ct->tick)
 			{
 				is = true;				
 				gqueueRT.pop();

@@ -134,8 +134,9 @@ void CFlvTransmission::getSliceFrameRate()
 	}
 }
 
-int CFlvTransmission::doTransmission()
+int CFlvTransmission::doTransmission(bool &isSendData)
 {
+	isSendData = false;
 	int ret = 0;
 	Slice *s = NULL;
 	Slice *ss = NULL;
@@ -337,6 +338,7 @@ int CFlvTransmission::doTransmission()
 				//¶¯Ì¬¶ªÖ¡ ½áÊø
 				if (needSend)
 				{
+					isSendData = true;
 					ret = mprotocol->sendVideoOrAudio(s,uiTimestamp);
 				}
 				if (mllTransIdx != -1 &&

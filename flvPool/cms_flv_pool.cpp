@@ -1024,6 +1024,11 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 		if (s->misRemove)
 		{
 			logs->debug(">>>>>[handleSlice] task %s is remove but not find hash",s->mstrUrl.c_str());
+			if (s->mData)
+			{
+				delete[] s->mData;
+			}
+			delete s;
 			return;
 		}
 		ss = newStreamSlice();
@@ -1139,6 +1144,10 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 		if (ss->mmetaDataSlice)
 		{
 			atomicDec(ss->mmetaDataSlice);
+		}
+		if (s->mData)
+		{
+			delete[] s->mData;
 		}
 		delete s;
 		delete ss;
