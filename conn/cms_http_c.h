@@ -49,9 +49,8 @@ public:
 	std::string getUrl();
 	std::string getPushUrl();
 	std::string getRemoteIP();
-	struct ev_loop  *evLoop();
-	struct ev_io    *evReadIO();
-	struct ev_io    *evWriteIO();
+	cms_net_ev    *evReadIO();
+	cms_net_ev    *evWriteIO();
 	void down8upBytes();
 
 	//stream info 接口
@@ -65,8 +64,6 @@ public:
 	//std::string getRemoteIP() = 0;
 	std::string getHost();
 	void    makeOneTask();
-
-	void setEVLoop(struct ev_loop *loop);
 
 	int doDecode();
 	int doReadData();
@@ -86,9 +83,8 @@ private:
 	int  decodeVideo(char *data,int len,uint32 timestamp);
 	int  decodeAudio(char *data,int len,uint32 timestamp);
 
-	struct ev_loop	*mloop;			//全局不属于本类
-	struct ev_io	*mwatcherReadIO;	
-	struct ev_io	*mwatcherWriteIO;
+	cms_net_ev	*mwatcherReadIO;	
+	cms_net_ev	*mwatcherWriteIO;
 
 	bool			misRequet;
 	bool			misDecodeHeader;

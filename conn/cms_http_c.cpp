@@ -33,6 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <protocol/cms_amf0.h>
 #include <common/cms_char_int.h>
 #include <static/cms_static.h>
+#include <net/cms_net_mgr.h>
 
 ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUrl,
 						 std::string refer,bool isTls)
@@ -72,7 +73,6 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	
 	murl = pullUrl;
 	moriUrl = oriUrl;
-	mloop = NULL;
 	mwatcherReadIO = NULL;
 	mwatcherWriteIO = NULL;
 	misChangeMediaInfo = false;
@@ -121,23 +121,19 @@ ChttpClient::~ChttpClient()
 {
 	logs->debug("######### %s [ChttpClient::~ChttpClient] http enter ",
 		mremoteAddr.c_str());
-	if (mloop)
+	if (mwatcherReadIO)
 	{
-		if (mwatcherReadIO)
-		{
-			ev_io_stop(mloop,mwatcherReadIO);
-			delete mwatcherReadIO;
-			logs->debug("######### %s [ChttpClient::~ChttpClient] stop read io ",
-				mremoteAddr.c_str());
-		}
-		if (mwatcherWriteIO)
-		{
-			ev_io_stop(mloop,mwatcherWriteIO);
-			delete mwatcherWriteIO;
-
-			logs->debug("######### %s [ChttpClient::~ChttpClient] stop write io ",
-				mremoteAddr.c_str());
-		}
+		CNetMgr::instance()->cneStop(mwatcherReadIO);
+		freeCmsNetEv(mwatcherReadIO);
+		logs->debug("######### %s [ChttpClient::~ChttpClient] stop read io ",
+			mremoteAddr.c_str());
+	}
+	if (mwatcherWriteIO)
+	{
+		CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		freeCmsNetEv(mwatcherWriteIO);
+		logs->debug("######### %s [ChttpClient::~ChttpClient] stop write io ",
+			mremoteAddr.c_str());
 	}
 	if (mtagFlv != NULL)
 	{
@@ -183,6 +179,8 @@ int ChttpClient::handleEv(FdEvents *fe)
 		else if (fe->events & EventWrite && mwatcherWriteIO != fe->watcherWriteIO)
 		{
 			//应该是旧的socket号的消息
+			printf("############# ChttpClient::handleEv not equal sock=%d,fe.sock=%d,mwatcherWriteIO=%p,fe.mwatcherWriteIO=%p #################\n",
+				mrw->fd(),fe->fd,mwatcherWriteIO,fe->watcherWriteIO);
 			return CMS_OK;
 		}
 		return doWrite(fe->events & EventWait2Write);
@@ -227,7 +225,7 @@ int ChttpClient::stop(std::string reason)
 		{
 			down8upBytes();
 			makeOneTaskDownload(mHash,0,true);
-		}	
+		}
 
 		CTaskMgr::instance()->pullTaskDel(mHash);
 		if (misRedirect)
@@ -260,36 +258,26 @@ std::string ChttpClient::getRemoteIP()
 	return mremoteIP;
 }
 
-struct ev_loop  *ChttpClient::evLoop()
-{
-	return mloop;
-}
-
-struct ev_io    *ChttpClient::evReadIO()
+cms_net_ev    *ChttpClient::evReadIO()
 {
 	if (mwatcherReadIO == NULL)
 	{
-		mwatcherReadIO = new (ev_io);
-		ev_io_init(mwatcherReadIO, readEV, mrw->fd(), EV_READ);
-		ev_io_start(mloop, mwatcherReadIO);
+		mwatcherReadIO = mallcoCmsNetEv();
+		initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
+		CNetMgr::instance()->cneStart(mwatcherReadIO);
 	}
 	return mwatcherReadIO;
 }
 
-struct ev_io    *ChttpClient::evWriteIO()
+cms_net_ev    *ChttpClient::evWriteIO()
 {
 	if (mwatcherWriteIO == NULL)
 	{
-		mwatcherWriteIO = new (ev_io);
-		ev_io_init(mwatcherWriteIO, writeEV, mrw->fd(), EV_WRITE);
-		ev_io_start(mloop, mwatcherWriteIO);
+		mwatcherWriteIO = mallcoCmsNetEv();
+		initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
+		CNetMgr::instance()->cneStart(mwatcherWriteIO);
 	}
 	return mwatcherWriteIO;
-}
-
-void ChttpClient::setEVLoop(struct ev_loop *loop)
-{
-	mloop = loop;
 }
 
 int ChttpClient::doDecode()

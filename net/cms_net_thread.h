@@ -22,17 +22,45 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#ifndef __CMS_DISPATCH_H__
-#define __CMS_DISPATCH_H__
+#ifndef __CMS_NET_THREAD_H__
+#define __CMS_NET_THREAD_H__
+#include <core/cms_thread.h>
+#include <common/cms_var.h>
+#include <core/cms_lock.h>
 #include <net/cms_net_var.h>
-#include <ev/cms_ev.h>
+#include <vector>
+#include <sys/socket.h>
+#include <sys/epoll.h>
 
-class CDispatch 
+//每一个 CNetThread 处理 MAX_NET_THREAD_NUM socket
+class CNetThread
 {
 public:
-	CDispatch();
-	virtual ~CDispatch();
-	virtual void  pushEv(int,int,cms_net_ev *watcherRead,cms_net_ev *watcherWrite) = 0;
-	virtual void  pushEv(int,int,cms_timer *ct) = 0;
+	CNetThread();
+	~CNetThread();
+
+	static void *routinue(void *param);
+	void thread();
+	bool run();
+	void stop();
+
+	void cneStart(cms_net_ev *cne,bool isListen = false);
+	void cneStop(cms_net_ev *cne);
+	int  cneSize();
+private:
+	bool isReadEv(int evs);
+	bool isWriteEv(int evs);
+	int  vectorIdx(int fd);
+	cms_net_ev *getReadCne(int fd);
+	cms_net_ev *getWriteCne(int fd);
+	int  epollEV(int evs,bool isListen);
+
+	CLock	mlockCNE;
+	std::vector<cms_net_ev *> mvRCNE;
+	std::vector<cms_net_ev *> mvWCNE;
+	int		mcneNum;
+	bool			misRun;
+	cms_thread_t	mtid;
+	int				mepfd;
 };
 #endif

@@ -36,7 +36,7 @@ CLog* cmsLogInstance()
 
 void cmsLogInit(string dir,LogLevel level,bool console,int limitSize)
 {
-	cmsLog = new(CLog);
+	cmsLog = new CLog;
 	if (dir.empty())
 	{
 		dir = "./log/";
@@ -68,7 +68,7 @@ int _vscprintf (const char * format, va_list pargs)
 
 #define NewLogInfo(logInfo,str,day,len) \
 	{\
-		logInfo = new(LogInfo);\
+		logInfo = new LogInfo;\
 		logInfo->day = day;\
 		logInfo->len = len;\
 		logInfo->log = str;}

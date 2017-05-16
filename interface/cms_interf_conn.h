@@ -26,7 +26,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_INTERFACE_CONN_H__
 #include <string>
 #include <common/cms_var.h>
-#include <libev/ev.h>
 
 class Conn
 {
@@ -40,9 +39,8 @@ public:
 	virtual std::string getPushUrl() = 0;
 	virtual std::string getRemoteIP() = 0;
 
-	virtual struct ev_loop  *evLoop() = 0;
-	virtual struct ev_io    *evReadIO() = 0;
-	virtual struct ev_io    *evWriteIO() = 0;
+	virtual cms_net_ev    *evReadIO() = 0;
+	virtual cms_net_ev    *evWriteIO() = 0;
 
 	virtual void down8upBytes() = 0;
 

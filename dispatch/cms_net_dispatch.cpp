@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
 #include <conn/cms_conn_mgr.h>
+#include <net/cms_net_mgr.h>
 #include <ev/cms_ev.h>
 #include <ev/cms_ev.h>
 #include <assert.h>
@@ -90,7 +91,7 @@ void CNetDispatch::addOneDispatch(int fd, CDispatch *ds)
 	{
 		//以前没有开辟过空间
 		ptr = new vector<CDispatch*>;
-		mfdDispatch.at(i) = ptr;
+		mfdDispatch[i] = ptr;
 	}
 	i = fd % MaxDispatchNum; //选中队列中的位置
 	for (unsigned int n = ptr->size(); n < (unsigned int)(i+1); n++)  //必须预分配位置
@@ -120,7 +121,7 @@ void CNetDispatch::delOneDispatch(int fd)
 	mdispatchLock.UnWLock();
 }
 
-void CNetDispatch::dispatchEv(struct ev_loop *loop,struct ev_io *watcherRead,struct ev_io *watcherWrite,int fd,int events)
+void CNetDispatch::dispatchEv(cms_net_ev *watcherRead,cms_net_ev *watcherWrite,int fd,int events)
 {
 	VDSPtr ptr = NULL;
 	mdispatchLock.RLock();
@@ -133,26 +134,7 @@ void CNetDispatch::dispatchEv(struct ev_loop *loop,struct ev_io *watcherRead,str
 		if ((ptr->size() > (unsigned int)i) && ptr->at(i))
 		{
 			//assert(ptr->at(i) != NULL);
-			ptr->at(i)->pushEv(fd,events,loop,watcherRead,watcherWrite,NULL);
-		}
-	}	
-	mdispatchLock.UnRLock();
-}
-
-void CNetDispatch::dispatchEv(struct ev_loop *loop,struct ev_timer *watcher,int fd,int events)
-{
-	VDSPtr ptr = NULL;
-	mdispatchLock.RLock();
-	int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
-	assert(mfdDispatch.size() > (unsigned int)i);
-	if (mfdDispatch.size() > (unsigned int)i)
-	{
-		ptr = mfdDispatch.at(i);
-		i = fd % MaxDispatchNum; //选中队列中的位置
-		if ((ptr->size() > (unsigned int)i) && ptr->at(i))
-		{
-			//assert(ptr->at(i) != NULL);
-			ptr->at(i)->pushEv(fd,events,loop,NULL,NULL,watcher);
+			ptr->at(i)->pushEv(fd,events,watcherRead,watcherWrite);
 		}
 	}	
 	mdispatchLock.UnRLock();
@@ -189,9 +171,9 @@ void CNetDispatch::addOneListenDispatch(int fd, TCPListener *tls)
 	mdispatchListen.insert(make_pair(fd,tls));
 	mdispatchListenLock.UnWLock();
 
-	struct ev_io *sockIO = new (ev_io);
-	ev_io_init(sockIO, acceptEV, fd, EV_READ);
-	ev_io_start(CConnMgrInterface::instance()->loop(), sockIO);
+	cms_net_ev *sockIO = mallcoCmsNetEv();
+	initCmsNetEv(sockIO,acceptEV,fd,EventRead);
+	CNetMgr::instance()->cneStart(sockIO,true);
 }
 
 void CNetDispatch::delOneListenDispatch(int fd)
@@ -207,25 +189,7 @@ void CNetDispatch::delOneListenDispatch(int fd)
 	mdispatchListenLock.UnWLock();
 }
 
-bool CNetDispatch::nonblocking(int fd)
-{
-	int opts;
-	opts = fcntl(fd, F_GETFL);
-	if (opts < 0)
-	{
-		logs->error("***** sock[ %d ] fcntl(sock,GETFL) *****",fd);
-		return false;
-	}
-	opts = opts | O_NONBLOCK;
-	if (fcntl(fd, F_SETFL, opts) < 0)
-	{
-		logs->error("***** sock[ %d ] fcntl(sock,SETFL,opts) *****",fd);
-		return false;
-	}
-	return true;
-}
-
-void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int fd)
+void CNetDispatch::dispatchAccept(cms_net_ev *watcher,int fd)
 {
 	int cfd = CMS_ERROR;
 	ConnType listenType = TypeNetNone;
@@ -247,8 +211,6 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			if (hs->doit() != CMS_ERROR)
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,hs);
-
-				hs->setEVLoop(CConnMgrInterface::instance()->loop());
 				hs->evReadIO();
 			}
 			else
@@ -262,8 +224,6 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			if (hs->doit() != CMS_ERROR)
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,hs);
-
-				hs->setEVLoop(CConnMgrInterface::instance()->loop());
 				hs->evReadIO();
 			}
 			else
@@ -277,8 +237,6 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			if (hs->doit() != CMS_ERROR)
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,hs);
-
-				hs->setEVLoop(CConnMgrInterface::instance()->loop());
 				hs->evReadIO();
 			}
 			else
@@ -292,8 +250,6 @@ void CNetDispatch::dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int
 			if (rtmp->doit() != CMS_ERROR)
 			{
 				CConnMgrInterface::instance()->addOneConn(cfd,rtmp);
-
-				rtmp->setEVLoop(CConnMgrInterface::instance()->loop());
 				rtmp->evReadIO();
 			}
 			else

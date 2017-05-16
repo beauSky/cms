@@ -22,17 +22,34 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#ifndef __CMS_DISPATCH_H__
-#define __CMS_DISPATCH_H__
-#include <net/cms_net_var.h>
-#include <ev/cms_ev.h>
+#ifndef __CMS_NET_MGR_H__
+#define __CMS_NET_MGR_H__
+#include <net/cms_net_thread.h>
+#include <common/cms_type.h>
+#include <core/cms_thread.h>
 
-class CDispatch 
+class CNetMgr
 {
 public:
-	CDispatch();
-	virtual ~CDispatch();
-	virtual void  pushEv(int,int,cms_net_ev *watcherRead,cms_net_ev *watcherWrite) = 0;
-	virtual void  pushEv(int,int,cms_timer *ct) = 0;
+	CNetMgr();
+	~CNetMgr();
+
+	static CNetMgr *instance();
+	static void freeInstance();
+
+// 	static void *routinue(void *param);
+// 	void thread();
+// 	bool run();
+// 	void stop();
+	//投递的时间必须包括读或写时间!!!!!!!
+	//改变事件之前必须先删除
+	void cneStart(cms_net_ev *cne,bool isListen = false);
+	void cneStop(cms_net_ev *cne);	
+private:
+	static CNetMgr *minstance;
+	CLock	mlockNetThread;
+	std::vector<CNetThread *> mvnetThread;
+// 	bool			misRun;
+// 	cms_thread_t	mtid;
 };
 #endif

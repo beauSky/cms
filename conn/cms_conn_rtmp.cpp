@@ -30,7 +30,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <common/cms_char_int.h>
 #include <taskmgr/cms_task_mgr.h>
 #include <static/cms_static.h>
-#include <libev/ev.h>
+#include <net/cms_net_mgr.h>
 #include <enc/cms_sha1.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -57,7 +57,6 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	mrw = rw;
 	mrtmp = new CRtmpProtocol(this,rtmpType,mrdBuff,mwrBuff,rw,mremoteAddr);
 	murl = pullUrl;
-	mloop = NULL;
 	mwatcherReadIO = NULL;
 	mwatcherWriteIO = NULL;
 	misChangeMediaInfo = false;
@@ -109,24 +108,20 @@ CConnRtmp::~CConnRtmp()
 {	
 	logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s enter ",
 		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
-	if (mloop)
+	if (mwatcherReadIO)
 	{
-		if (mwatcherReadIO)
-		{
-			ev_io_stop(mloop,mwatcherReadIO);
-			delete mwatcherReadIO;
-			logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop read io ",
-				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
-		}
-		if (mwatcherWriteIO)
-		{
-			ev_io_stop(mloop,mwatcherWriteIO);
-			delete mwatcherWriteIO;
-
-			logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop write io ",
-				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
-		}
-	}	
+		CNetMgr::instance()->cneStop(mwatcherReadIO);
+		freeCmsNetEv(mwatcherReadIO);
+		logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop read io ",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
+	}
+	if (mwatcherWriteIO)
+	{
+		CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		freeCmsNetEv(mwatcherWriteIO);
+		logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop write io ",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
+	}
 	delete mflvTrans;
 	delete mrtmp;
 	delete mrdBuff;
@@ -294,46 +289,24 @@ void CConnRtmp::justTick()
 	}
 }
 
-void CConnRtmp::setEVLoop(struct ev_loop *loop)
-{
-	mloop = loop;
-}
-
-struct ev_loop *CConnRtmp::evLoop()
-{
-	return mloop;
-}
-
-struct ev_io *CConnRtmp::evReadIO()
+cms_net_ev *CConnRtmp::evReadIO()
 {
 	if (mwatcherReadIO == NULL)
 	{
-		mwatcherReadIO = new (ev_io);
-		ev_io_init(mwatcherReadIO, readEV, mrw->fd(), EV_READ);
-		ev_io_start(mloop, mwatcherReadIO);
-		//²âÊÔ
-		/*mwatcherTimer = new(ev_timer);
-		mwatcherTimer->data = (void *)mrw->fd();
-		ev_init(mwatcherTimer,justTickEV);  
-		ev_timer_set(mwatcherTimer,0,10);  
-		ev_timer_start(mloop,mwatcherTimer); */
+		mwatcherReadIO = mallcoCmsNetEv();
+		initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
+		CNetMgr::instance()->cneStart(mwatcherReadIO);
 	}
 	return mwatcherReadIO;
 }
 
-struct ev_io *CConnRtmp::evWriteIO()
+cms_net_ev *CConnRtmp::evWriteIO()
 {
 	if (mwatcherWriteIO == NULL)
 	{
-		mwatcherWriteIO = new (ev_io);
-		ev_io_init(mwatcherWriteIO, writeEV, mrw->fd(), EV_WRITE);
-		ev_io_start(mloop, mwatcherWriteIO);
-		//²âÊÔ
-		/*mwatcherTimer = new(ev_timer);
-		mwatcherTimer->data = (void *)mrw->fd();
-		ev_init(mwatcherTimer,justTickEV);  
-		ev_timer_set(mwatcherTimer,0,10);  
-		ev_timer_start(mloop,mwatcherTimer); */
+		mwatcherWriteIO = mallcoCmsNetEv();
+		initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
+		CNetMgr::instance()->cneStart(mwatcherWriteIO);
 	}
 	return mwatcherWriteIO;
 }

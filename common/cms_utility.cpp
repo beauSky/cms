@@ -642,3 +642,21 @@ std::string parseSpeed8Mem(int64 speed,bool isSpeed)
 	}
 	return value;
 }
+
+bool nonblocking(int fd)
+{
+	int opts;
+	opts = fcntl(fd, F_GETFL);
+	if (opts < 0)
+	{
+		logs->error("***** sock[ %d ] fcntl(sock,GETFL) *****",fd);
+		return false;
+	}
+	opts = opts | O_NONBLOCK;
+	if (fcntl(fd, F_SETFL, opts) < 0)
+	{
+		logs->error("***** sock[ %d ] fcntl(sock,SETFL,opts) *****",fd);
+		return false;
+	}
+	return true;
+}

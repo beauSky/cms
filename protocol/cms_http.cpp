@@ -431,10 +431,6 @@ CHttp::CHttp(Conn *super,CBufferReader *rd,
 
 CHttp::~CHttp()
 {
-	if (mcmsReadTimeout)
-	{
-		delete mcmsReadTimeout;
-	}
 	if (mcmsWriteTimeout)
 	{
 		//别的地方可能还在使用，不能直接delete

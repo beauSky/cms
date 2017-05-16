@@ -26,9 +26,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_NET_DISPATCH_H__
 #include <interface/cms_dispatch.h>
 #include <net/cms_tcp_conn.h>
+#include <net/cms_net_var.h>
 #include <core/cms_lock.h>
 #include <ev/cms_ev.h>
-#include <libev/ev.h>
 #include <vector>
 #include <map>
 using namespace std;
@@ -43,15 +43,13 @@ public:
 
 	void addOneDispatch(int fd, CDispatch *ds);
 	void delOneDispatch(int fd);
-	void dispatchEv(struct ev_loop *loop,struct ev_io *watcherRead,struct ev_io *watcherWrite,int fd,int events);
-	void dispatchEv(struct ev_loop *loop,struct ev_timer *watcher,int fd,int events);
+	void dispatchEv(cms_net_ev *watcherRead,cms_net_ev *watcherWrite,int fd,int events);
 	void dispatchEv(cms_timer *ct,int fd,int events);
 
 	void addOneListenDispatch(int fd, TCPListener *tls);
 	void delOneListenDispatch(int fd);
-	void dispatchAccept(struct ev_loop *loop,struct ev_io *watcher,int fd);
+	void dispatchAccept(cms_net_ev *watcher,int fd);
 private:
-	bool nonblocking(int fd);
 
 	static CNetDispatch *minstance;
 	vector<vector<CDispatch*>* > mfdDispatch;

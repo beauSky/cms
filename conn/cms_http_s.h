@@ -30,7 +30,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <common/cms_type.h>
 #include <common/cms_binary_writer.h>
 #include <protocol/cms_http.h>
-#include <libev/ev.h>
+#include <net/cms_net_var.h>
 #include <string>
 
 class CHttpServer:public Conn
@@ -45,12 +45,9 @@ public:
 	std::string getUrl();
 	std::string getPushUrl(){return "";};
 	std::string getRemoteIP();
-	struct ev_loop  *evLoop();
-	struct ev_io    *evReadIO();
-	struct ev_io    *evWriteIO();
+	cms_net_ev    *evReadIO();
+	cms_net_ev    *evWriteIO();
 	void down8upBytes();
-
-	void setEVLoop(struct ev_loop *loop);
 
 	int doDecode();
 	int doReadData(){return CMS_OK;};
@@ -66,9 +63,8 @@ private:
 	void makeHash();
 	void tryCreateTask();
 	
-	struct ev_loop	*mloop;			//全局不属于本类
-	struct ev_io	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
-	struct ev_io	*mwatcherWriteIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
+	cms_net_ev	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
+	cms_net_ev	*mwatcherWriteIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
 
 	bool			misDecodeHeader;
 	CReaderWriter	*mrw;

@@ -69,11 +69,8 @@ public:
 	std::string getHost();
 	void    makeOneTask();
 
-	struct ev_loop  *evLoop();
-	struct ev_io    *evReadIO();
-	struct ev_io    *evWriteIO();
-
-	void setEVLoop(struct ev_loop *loop);
+	cms_net_ev    *evReadIO();
+	cms_net_ev    *evWriteIO();
 	
 	void setUrl(std::string url);		//拉流或者被推流或者被播放的地址
 	void setPushUrl(std::string url);	//推流到其它服务的推流地址
@@ -93,10 +90,8 @@ private:
 	void makePushHash();
 	void justTick();
 
-	struct ev_loop	*mloop;			//全局不属于本类
-	struct ev_io	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
-	struct ev_io	*mwatcherWriteIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
-	struct ev_timer *mwatcherTimer;
+	cms_net_ev	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
+	cms_net_ev	*mwatcherWriteIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
 
 	uint64	mjustTickOld;
 	uint64	mjustTick;

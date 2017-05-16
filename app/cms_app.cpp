@@ -32,6 +32,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <flvPool/cms_flv_pool.h>
 #include <taskmgr/cms_task_mgr.h>
 #include <static/cms_static.h>
+#include <net/cms_net_mgr.h>
 #include <map>
 #include <string>
 #include <signal.h>
@@ -127,6 +128,7 @@ void initInstance()
 	CServer::instance();
 	CTaskMgr::instance();
 	CStatic::instance();
+	CNetMgr::instance();
 }
 
 void parseVar(int num,char **argv)

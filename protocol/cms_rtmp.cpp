@@ -122,10 +122,6 @@ CRtmpProtocol::~CRtmpProtocol()
 		delete[] mps1;
 		mps1 = NULL;
 	}
-	if (mcmsReadTimeout)
-	{
-		delete mcmsReadTimeout;
-	}
 	if (mcmsWriteTimeout)
 	{
 		//别的地方可能还在使用，不能直接delete
@@ -2833,7 +2829,7 @@ void CRtmpProtocol::syncIO()
 	else if (mrtmpType == RtmpClient2Publish || mrtmpType == RtmpServerBPlay)
 	{
 		//ev_io_stop(msuper->evLoop(), msuper->evWriteIO());
-		//没有数据可读
+		//没有数据可写
 		doWriteTimeout();
 	}
 }

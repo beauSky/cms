@@ -101,7 +101,7 @@ bool CDnsCache::host2ip(const char* host,unsigned long &ip)
 			}
 			else
 			{
-				HostInfo *hi = new(HostInfo);
+				HostInfo *hi = new HostInfo;
 				hi->ip = ip;
 				hi->tt = tt;
 				mmapHostInfo.insert(make_pair(host,hi));

@@ -85,4 +85,5 @@ void split(std::string& s, std::string& delim,std::vector< std::string > &ret);
 std::string trim(std::string &s,std::string &delim);
 HASH makeHash(const char *bytes,int len);
 std::string parseSpeed8Mem(int64 speed,bool isSpeed);
+bool nonblocking(int fd);
 #endif

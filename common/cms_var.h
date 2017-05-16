@@ -24,7 +24,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #ifndef __CMS_COMMON_TYPE_H__
 #define __CMS_COMMON_TYPE_H__
-#include <libev/ev.h>
+#include <net/cms_net_var.h>
 
 typedef void (*cms_timer_cb)(void *t);
 typedef struct _cms_timer 
@@ -39,10 +39,8 @@ struct FdEvents
 {
 	int fd;
 	int events;
-	struct ev_loop *loop;
-	struct ev_io *watcherReadIO;
-	struct ev_io *watcherWriteIO;
-	struct ev_timer *watcherTimeout;
+	cms_net_ev *watcherReadIO;
+	cms_net_ev *watcherWriteIO;
 	struct _cms_timer *watcherWCmsTimer;
 	struct _cms_timer *watcherRCmsTimer;
 };

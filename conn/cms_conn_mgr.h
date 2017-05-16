@@ -46,7 +46,7 @@ public:
 
 	void addOneConn(int fd,Conn *c);
 	void delOneConn(int fd);
-	void  pushEv(int fd,int events,struct ev_loop *loop,struct ev_io *watcherRead,struct ev_io *watcherWrite,struct ev_timer *watcherTimeout);
+	void  pushEv(int fd,int events,cms_net_ev *watcherRead,cms_net_ev *watcherWrite);
 	void  pushEv(int fd,int events,cms_timer *ct);
 private:	
 	void dispatchEv(FdEvents *fe);
@@ -75,14 +75,11 @@ public:
 
 	void addOneConn(int fd,Conn *c);
 	void delOneConn(int fd);
-	struct ev_loop *loop();
 	Conn *createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
 		,ConnType connectType,RtmpType rtmpType);
 private:
 	static CConnMgrInterface *minstance;
 	CConnMgr *mconnMgrArray[NUM_OF_THE_CONN_MGR];
-	struct ev_loop *mloop;
-	struct ev_timer*mtimer; 
 	bool			misRun;
 	cms_thread_t	mtid;
 };

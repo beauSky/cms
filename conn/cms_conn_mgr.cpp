@@ -86,15 +86,13 @@ void CConnMgr::dispatchEv(FdEvents *fe)
 	}
 }
 
-void  CConnMgr::pushEv(int fd,int events,struct ev_loop *loop,struct ev_io *watcherRead,struct ev_io *watcherWrite,struct ev_timer *watcherTimeout)
+void  CConnMgr::pushEv(int fd,int events,cms_net_ev *watcherRead,cms_net_ev *watcherWrite)
 {
-	FdEvents * fe = new(FdEvents);
+	FdEvents * fe = new FdEvents;
 	fe->fd = fd;
-	fe->loop = loop;
 	fe->events = events;
 	fe->watcherReadIO = watcherRead;
 	fe->watcherWriteIO = watcherWrite;
-	fe->watcherTimeout = watcherTimeout;
 	fe->watcherWCmsTimer = NULL;
 	fe->watcherRCmsTimer = NULL;
 	mqueueLock.Lock();
@@ -104,13 +102,11 @@ void  CConnMgr::pushEv(int fd,int events,struct ev_loop *loop,struct ev_io *watc
 
 void CConnMgr::pushEv(int fd,int events,cms_timer *ct)
 {
-	FdEvents * fe = new(FdEvents);
+	FdEvents * fe = new FdEvents;
 	fe->fd = fd;
-	fe->loop = NULL;
 	fe->events = events;
 	fe->watcherReadIO = NULL;
 	fe->watcherWriteIO = NULL;
-	fe->watcherTimeout = NULL;
 	if (events == EventWait2Read)
 	{
 		fe->watcherWCmsTimer = NULL;
@@ -202,8 +198,6 @@ CConnMgrInterface *CConnMgrInterface::minstance = NULL;
 CConnMgrInterface::CConnMgrInterface()
 {
 	misRun = false;
-	mloop = ev_default_loop(0);
-	mtimer = new ev_timer;
 	for (int i =0; i < NUM_OF_THE_CONN_MGR;i ++)
 	{
 		mconnMgrArray[i] = new CConnMgr();
@@ -251,11 +245,6 @@ void CConnMgrInterface::delOneConn(int fd)
 	mconnMgrArray[i]->delOneConn(fd);
 }
 
-struct ev_loop *CConnMgrInterface::loop()
-{
-	return mloop;
-}
-
 Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
 									,ConnType connectType,RtmpType rtmpType)
 {
@@ -272,7 +261,6 @@ Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUr
 		{
 			CConnMgrInterface::instance()->addOneConn(tcp->fd(),http);
 
-			http->setEVLoop(mloop);
 			http->evReadIO();
 			http->evWriteIO();
 			conn = http;
@@ -295,7 +283,6 @@ Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUr
 		{
 			CConnMgrInterface::instance()->addOneConn(tcp->fd(),rtmp);
 
-			rtmp->setEVLoop(mloop);
 			rtmp->evReadIO();
 			rtmp->evWriteIO();
 			conn = rtmp;
@@ -324,11 +311,6 @@ void *CConnMgrInterface::routinue(void *param)
 void CConnMgrInterface::thread()
 {
 	logs->info(">>>>> CConnMgrInterface thread pid=%d\n",gettid());
-	ev_init(mtimer,timerTick);  
-	ev_timer_set(mtimer,0,10);  
-	ev_timer_start(mloop,mtimer);  
-
-	ev_run(mloop, 0); 
 	logs->info(">>>>> CConnMgrInterface thread leave pid=%d\n",gettid());
 }
 

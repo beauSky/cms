@@ -123,12 +123,15 @@ int   TCPConn::dialTcp(char *addr,ConnType connectType)
 
 int	  TCPConn::connect()
 {
+	nonblocking(mfd);
 	if (::connect(mfd,(struct sockaddr *)&mto, sizeof(mto)) < 0)
 	{
-		logs->error("*** [TCPConn::connect] connect socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
-		::close(mfd);
-		mfd = -1;
-		return CMS_ERROR;
+		if (errno != EINPROGRESS)
+		{
+			logs->error("*** [TCPConn::connect] connect socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
+			::close(mfd);
+			return CMS_ERROR;
+		}		
 	}
 	logs->info("##### TCPConn connect addr %s succ #####",maddr.c_str());
 	return CMS_OK;
@@ -300,6 +303,7 @@ int  TCPListener::listen(char* addr,ConnType listenType)
 	{
 		logs->error("*** TCPListener listen set SO_REUSEADDR fail,errno=%d,errstr=%s *****",errno,strerror(errno));
 	}
+	nonblocking(mfd);
 	memset(&serv_addr, 0, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);

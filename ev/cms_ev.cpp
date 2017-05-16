@@ -61,7 +61,7 @@ void atomicDec(cms_timer *ct)
 
 cms_timer *mallcoCmsTimer()
 {
-	cms_timer * ct = new(cms_timer);
+	cms_timer * ct = new cms_timer;
 	ct->only = 0;
 	atomicInc(ct); //新创建，计数器加1
 	return ct;
@@ -70,24 +70,6 @@ cms_timer *mallcoCmsTimer()
 void freeCmsTimer(cms_timer *ct)
 {
 	atomicDec(ct);
-}
-
-int event2event(int revents)
-{
-	int event = 0;
-	if (EV_ERROR&revents)
-	{
-		event |= EventErrot;
-	}
-	if (EV_READ&revents)
-	{
-		event |= EventRead;
-	}
-	if (EV_WRITE&revents)
-	{
-		event |= EventWrite;
-	}
-	return event;
 }
 
 void *cms_timer_write_thread(void *param)
@@ -218,19 +200,22 @@ void cms_timer_start(cms_timer *ct,bool isWrite/* = true*/)
 	}	
 }
 
-void acceptEV(struct ev_loop *loop,struct ev_io *watcher,int revents)
+void acceptEV(void *w,int revents)
 {
-	CNetDispatch::instance()->dispatchAccept(loop,watcher,watcher->fd);
+	cms_net_ev *watcher = (cms_net_ev *)w;
+	CNetDispatch::instance()->dispatchAccept(watcher,watcher->mfd);
 }
 
-void readEV(struct ev_loop *loop,struct ev_io *watcher,int revents)
+void readEV(void *w,int revents)
 {
-	CNetDispatch::instance()->dispatchEv(loop,watcher,NULL,watcher->fd,event2event(revents));
+	cms_net_ev *watcher = (cms_net_ev *)w;
+	CNetDispatch::instance()->dispatchEv(watcher,NULL,watcher->mfd,revents);
 }
 
-void writeEV(struct ev_loop *loop,struct ev_io *watcher,int revents)
-{
-	CNetDispatch::instance()->dispatchEv(loop,NULL,watcher,watcher->fd,event2event(revents));
+void writeEV(void *w,int revents)
+{	
+	cms_net_ev *watcher = (cms_net_ev *)w;
+	CNetDispatch::instance()->dispatchEv(NULL,watcher,watcher->mfd,revents);
 }
 
 void wait2ReadEV(void *t)
@@ -243,15 +228,4 @@ void wait2WriteEV(void *t)
 {
 	cms_timer *ct = (cms_timer *)t;
 	CNetDispatch::instance()->dispatchEv(ct,ct->fd,EventWait2Write);
-}
-
-void justTickEV(struct ev_loop *loop,struct ev_timer *watcher,int revents)
-{
-	int fd = (long)watcher->data;
-	CNetDispatch::instance()->dispatchEv(loop,watcher,fd,EventJustTick);
-}
-
-void timerTick(struct ev_loop *loop,struct ev_timer *watcher,int revents)
-{
-	//printf(">>>>>timer tick.\n");
 }

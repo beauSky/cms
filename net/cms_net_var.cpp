@@ -22,17 +22,43 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#ifndef __CMS_DISPATCH_H__
-#define __CMS_DISPATCH_H__
 #include <net/cms_net_var.h>
-#include <ev/cms_ev.h>
 
-class CDispatch 
+void atomicInc(cms_net_ev *cne)
 {
-public:
-	CDispatch();
-	virtual ~CDispatch();
-	virtual void  pushEv(int,int,cms_net_ev *watcherRead,cms_net_ev *watcherWrite) = 0;
-	virtual void  pushEv(int,int,cms_timer *ct) = 0;
-};
-#endif
+	if (cne)
+	{
+		__sync_add_and_fetch(&cne->monly,1);		//当数据超时，且没人使用时，删除
+	}
+}
+
+void atomicDec(cms_net_ev *cne)
+{
+	if (__sync_sub_and_fetch(&cne->monly,1) == 0)//当数据超时，且没人使用时，删除
+	{
+		delete cne;
+	}
+}
+
+cms_net_ev *mallcoCmsNetEv()
+{
+	cms_net_ev * cne = new cms_net_ev;
+	cne->monly = 0;
+	//cne->mcallBack = NULL;
+	cne->mfd = -1;
+	cne->mwatchEvent = 0;
+	atomicInc(cne); //新创建，计数器加1
+	return cne;
+}
+
+void freeCmsNetEv(cms_net_ev *cne)
+{
+	atomicDec(cne);
+}
+
+void initCmsNetEv(cms_net_ev *cne,cms_net_cb callback,int fd,int event)
+{
+	cne->mcallBack = callback;
+	cne->mfd = fd;
+	cne->mwatchEvent = event;
+}
