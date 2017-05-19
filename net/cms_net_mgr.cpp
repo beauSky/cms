@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <net/cms_net_mgr.h>
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
+#include <assert.h>
 
 #define VectorVectorNTIneroter std::vector<std::vector<CNetThread *> *>::iterator
 #define VectorNTIneroter std::vector<CNetThread *>::iterator
@@ -111,7 +112,7 @@ void CNetMgr::cneStart(cms_net_ev *cne,bool isListen/* = false*/)
 	}
 	else
 	{		
-		for (uint32 n = mvnetThread.size(); n < i; n++)
+		for (uint32 n = mvnetThread.size(); n <= i; n++)
 		{			
 			mvnetThread.push_back(NULL);
 		}
@@ -122,7 +123,7 @@ void CNetMgr::cneStart(cms_net_ev *cne,bool isListen/* = false*/)
 			cmsSleep(1000*3);
 			exit(0);
 		}
-		mvnetThread.push_back(cnt);
+		mvnetThread[i] = cnt;
 	}
 	if (cnt == NULL)
 	{
@@ -142,19 +143,23 @@ void CNetMgr::cneStart(cms_net_ev *cne,bool isListen/* = false*/)
 void CNetMgr::cneStop(cms_net_ev *cne)
 {
 	CNetThread *cnt = NULL;
+	assert(cne->mfd > 0);
 	uint32 i = (uint32)cne->mfd / MAX_NET_THREAD_FD_NUM;
 	mlockNetThread.Lock();
 	if (mvnetThread.size() > i)
 	{
 		cnt = mvnetThread[i];
-		cnt->cneStop(cne);
-		if (cnt->cneSize() == 0)
+		if (cnt)
 		{
-			logs->debug("\n##### begin stop CNetThread %p #####\n",cnt);
-			cnt->stop();
-			logs->debug("\n##### finish stop CNetThread %p #####\n",cnt);
-			delete cnt;
-			mvnetThread[i] = NULL;
+			cnt->cneStop(cne);
+			if (cnt->cneSize() == 0)
+			{
+				logs->debug("\n##### begin stop CNetThread %p #####\n",cnt);
+				cnt->stop();
+				logs->debug("\n##### finish stop CNetThread %p #####\n",cnt);
+				delete cnt;
+				mvnetThread[i] = NULL;
+			}
 		}
 	}	
 	mlockNetThread.Unlock();

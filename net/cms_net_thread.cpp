@@ -47,7 +47,7 @@ CNetThread::CNetThread()
 
 CNetThread::~CNetThread()
 {
-	printf(">>>>>CNetThread::~CNetThread %p .\n",this);
+// 	printf(">>>>>CNetThread::~CNetThread %p .\n",this);
 	if (mepfd > 0)
 	{
 		close(mepfd);
@@ -270,6 +270,7 @@ void CNetThread::cneStop(cms_net_ev *cne)
 	bool isRemove = false;
 	int i = vectorIdx(cne->mfd);
 	mlockCNE.Lock();
+// 	printf(">>>>>CNetThread::cneStop %p .\n",this);
 	if (mvRCNE[i] != NULL)
 	{
 		isRemove = true;
