@@ -28,6 +28,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <common/cms_type.h>
 #include <s2n/s2n.h>
 
+#define DEFAULT_BUFFER_SIZE (32*1024)
+
 class CBufferReader
 {
 public:
@@ -60,8 +62,8 @@ private:
 class CBufferWriter
 {
 public:
-	CBufferWriter(CReaderWriter *rd,int size = 128*1024);
-	CBufferWriter(s2n_connection *s2nConn,int size = 128*1024);
+	CBufferWriter(CReaderWriter *rd,int size = DEFAULT_BUFFER_SIZE);
+	CBufferWriter(s2n_connection *s2nConn,int size = DEFAULT_BUFFER_SIZE);
 	~CBufferWriter();
 	int writeBytes(const char *data,int n); //要么出错返回 -1,要么返回实际发送的数据,如果本次没发送完毕，会保存到底层
 	int writeByte(char ch);
@@ -88,7 +90,7 @@ private:
 class CByteReaderWriter
 {
 public:
-	CByteReaderWriter(int size = 128*1024);
+	CByteReaderWriter(int size = DEFAULT_BUFFER_SIZE);
 	~CByteReaderWriter();
 	int	  writeBytes(const char *data,int n);
 	int   writeByte(char ch);

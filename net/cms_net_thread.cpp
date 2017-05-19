@@ -224,7 +224,7 @@ void CNetThread::cneStart(cms_net_ev *cne,bool isListen/* = false*/)
 	if (isReadEv(cne->mwatchEvent))
 	{
 		cneoR = mvRCNE[i];
-		//可能以前投递过写时间
+		//可能以前投递过写事件
 		if (mvWCNE[i] != NULL)
 		{
 			ev.events |= epollEV(mvWCNE[i]->mwatchEvent,isListen);
@@ -234,7 +234,7 @@ void CNetThread::cneStart(cms_net_ev *cne,bool isListen/* = false*/)
 	if (isWriteEv(cne->mwatchEvent))
 	{
 		cneoW = mvWCNE[i];
-		//可能以前投递过读时间
+		//可能以前投递过读事件
 		if (mvRCNE[i] != NULL)
 		{
 			ev.events |= epollEV(mvRCNE[i]->mwatchEvent,isListen);

@@ -54,6 +54,9 @@ CFlvPump::CFlvPump(CStreamInfo *super,HASH &hash,uint32 &hashIdx,std::string rem
 	mllIdx = 1;
 	misPublish = false;
 	misPushFlv = false;
+
+	misH264 = false;
+	misH265 = false;
 }
 
 CFlvPump::~CFlvPump()
@@ -129,7 +132,6 @@ int CFlvPump::decodeVideo(char *data,int len,uint32 timestamp,bool &isChangeMedi
 	{
 		return 0;
 	}
-
 	//jitter
 	int64 tn = getTimeUnix();
 	int64 tk = tn - mcreateTT;
@@ -168,14 +170,24 @@ int CFlvPump::decodeVideo(char *data,int len,uint32 timestamp,bool &isChangeMedi
 		{
 			return 0; //ПежЁ
 		}
+		misH264 = false;
+		misH265 = false;
 	}
-	else if (vType == 0x07)
+	else if (vType == VideoTypeAVC || vType == VideoTypeHEVC)
 	{
 		if (len <= 5)
 		{
 			return 0; //ПежЁ
 		}
-		if (data[0] == 0x17)
+		if (vType == VideoTypeAVC)
+		{
+			misH264 = true;
+		}
+		else if (vType == VideoTypeHEVC)
+		{
+			misH265 = true;
+		}
+		if (data[0] == VideoTypeAVCKey || data[0] == VideoTypeHEVCKey)
 		{
 			isKeyFrame = true;
 			if (data[1] == 0x00)
@@ -190,6 +202,11 @@ int CFlvPump::decodeVideo(char *data,int len,uint32 timestamp,bool &isChangeMedi
 			}
 		}
 	}
+	else
+	{
+		misH264 = false;
+		misH265 = false;
+	}
 	Slice *s = newSlice();
 	if (isChangeMediaInfo)
 	{
@@ -201,6 +218,8 @@ int CFlvPump::decodeVideo(char *data,int len,uint32 timestamp,bool &isChangeMedi
 	s->miDataType = dataType;
 	s->misKeyFrame = isKeyFrame;
 	s->mllIndex = mllIdx;
+	s->misH264 = misH264;
+	s->misH265 = misH265;
 	s->misPushTask = misPublish;
 	if (dataType != DATA_TYPE_FIRST_VIDEO)
 	{		
@@ -289,6 +308,8 @@ int CFlvPump::decodeAudio(char *data,int len,uint32 timestamp,bool &isChangeMedi
 	s->miDataType = dataType;
 	s->mllIndex = mllIdx;
 	s->misPushTask = misPublish;
+	s->misH264 = misH264;
+	s->misH265 = misH265;
 	if (dataType != DATA_TYPE_FIRST_AUDIO)
 	{
 		mllIdx++;
@@ -387,6 +408,7 @@ void CFlvPump::copy2Slice(Slice *s)
 	s->mstrHost = msuper->getHost();
 	s->misRealTimeStream = msuper->isRealTimeStream();
 	s->mllCacheTT = msuper->cacheTT();
-
+	s->misH264 = misH264;
+	s->misH265 = misH265;
 	msuper->makeOneTask();
 }

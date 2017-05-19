@@ -64,6 +64,7 @@ public:
 	std::string remoteAddr();
 	std::string getUrl();
 	int writeBuffSize();
+	void setWriteBuffer(int size);
 	void syncIO();
 
 	void shouldCloseNodelay();

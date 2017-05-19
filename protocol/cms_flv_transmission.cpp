@@ -183,6 +183,19 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 		//Ê×²¥¶ªÖ¡³õÊ¼»¯
 		if (!mfirstPlay->isInit())
 		{
+			//ÉèÖÃÍøÂç²ã·¢ËÍ»º³å
+			int medieRate = CFlvPool::instance()->getMediaRate(mreadHashIdx,mreadHash);
+			int sendBufSize = medieRate / 8 * 1024;
+			if (sendBufSize < 32*1024)
+			{
+				sendBufSize = 32 * 1024;
+			}
+			if (sendBufSize > 512*1024)
+			{
+				sendBufSize = 512 * 1024;
+			}
+			mprotocol->setWriteBuffer(sendBufSize);
+			//ÉèÖÃÍøÂç²ã·¢ËÍ»º³å ½áÊø
 			mfirstPlay->init(mreadHash,mreadHashIdx,mprotocol->remoteAddr(),"flv",mprotocol->getUrl());
 		}
 		if (!mfirstPlay->checkfirstPlay())

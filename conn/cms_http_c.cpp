@@ -50,9 +50,9 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	{
 		mremoteIP = mremoteAddr.substr(0,pos);
 	}
-	mrdBuff = new CBufferReader(rw,128*1024);
+	mrdBuff = new CBufferReader(rw,DEFAULT_BUFFER_SIZE);
 	assert(mrdBuff);
-	mwrBuff = new CBufferWriter(rw,128*1024);
+	mwrBuff = new CBufferWriter(rw,DEFAULT_BUFFER_SIZE);
 	assert(mwrBuff);
 	mrw = rw;
 	mhttp = new CHttp(this,mrdBuff,mwrBuff,rw,mremoteAddr,true,isTls);
@@ -82,7 +82,7 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	miLiveStreamTimeout = 1000*60*10;
 	miNoHashTimeout = 1000*3;
 	misRealTimeStream = false;
-	mllCacheTT = 1000*15;
+	mllCacheTT = 1000*5;
 	mllIdx = 0;
 	misPushFlv = false;
 	misDown8upBytes = false;

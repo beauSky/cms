@@ -90,8 +90,9 @@ bool CFirstPlay::checkfirstPlay()
 bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 {
 	if (!(mfirstPlaySkipMilSecond > 0 && transIdx == -1 &&
-		s->mData[0] == 0x17 && CFlvPool::instance()->isH264(mhashIdx,mhash) &&
-		CFlvPool::instance()->getMediaRate(mhashIdx,mhash) > FIRST_DROP_MEDIA_RATE))
+			(s->mData[0] == VideoTypeAVCKey && CFlvPool::instance()->isH264(mhashIdx,mhash) ||
+			 s->mData[0] == VideoTypeHEVCKey && CFlvPool::instance()->isH265(mhashIdx,mhash))/* &&
+		CFlvPool::instance()->getMediaRate(mhashIdx,mhash) > FIRST_DROP_MEDIA_RATE*/))
 	{		
 		return true;
 	}
@@ -171,8 +172,10 @@ bool CFirstPlay::needDropFrame(Slice *s)
 			mhaveDropSliceNum < mdropSliceNum-5) ||
 			(misSetFirstFrame &&
 			mhaveDropSliceNum >= mdropSliceNum-5 &&
-			s->mData[0] != 0x17))) 
+			s->mData[0] != VideoTypeAVCKey &&
+			s->mData[0] != VideoTypeHEVCKey))) 
 		{
+			//如果关键帧距离gop小于丢帧长度，只有满足丢帧数大于丢帧长度，而且遇到关键帧才能结束
 			logs->debug(">>>%s %s first play task %s 11 should drop slice num %d,have drop %d",
 				mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 				mdropSliceNum,mhaveDropSliceNum);
@@ -180,9 +183,9 @@ bool CFirstPlay::needDropFrame(Slice *s)
 		}
 		else
 		{
-			//如果关键帧距离大于丢帧长度，遇到关键帧肯定丢帧结束
+			//如果关键帧距离gop大于丢帧长度，遇到关键帧肯定丢帧结束
 			if (mdistanceKeyFrame > mfirstPlaySkipMilSecond &&
-				s->mData[0] == 0x17)
+				(s->mData[0] == VideoTypeAVCKey || s->mData[0] == VideoTypeHEVCKey))
 			{
 				logs->debug(">>>%s %s first play task %s 22 should drop slice num %d,have drop %d",
 					mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),

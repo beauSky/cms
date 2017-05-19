@@ -262,7 +262,7 @@ int CSSL::handShakeTLS()
 			mremoteAddr.c_str());
 		misTlsHandShake = true;
 
-		mrdBuff = new CBufferReader(ms2nConn,128*1024);
+		mrdBuff = new CBufferReader(ms2nConn,DEFAULT_BUFFER_SIZE);
 		mwrBuff = new CBufferWriter(ms2nConn);
 
 		return 1;

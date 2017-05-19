@@ -77,6 +77,9 @@ private:
 	CJitter			*mjitter;
 	int64			mcreateTT;
 
+	bool misH264;
+	bool misH265;
+
 	int64           mllIdx;
 	bool			misPublish;		//是否是客户端publish
 	bool            misPushFlv;		//是否往flvPool投递过数据

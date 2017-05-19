@@ -82,6 +82,9 @@ Slice *newSlice()
 	s->miAudioFrameRate = 0;
 	s->miAudioChannelID = -1;
 
+	s->misH264 = false;
+	s->misH265 = false;
+
 	s->mllCacheTT = 0;
 	s->miPlayStreamTimeout = 0;
 	s->misRealTimeStream = false;
@@ -129,6 +132,7 @@ StreamSlice *newStreamSlice()
 	ss->mfirstAudioSlice = NULL;
 	ss->mllFirstAudioIdx = -1;
 	ss->misH264 = false;
+	ss->misH265 = false;
 	ss->mllVideoAbsoluteTimestamp = -1;
 	ss->mllAudioAbsoluteTimestamp = -1;
 	ss->misHaveMetaData = false;
@@ -421,8 +425,8 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 				else if (llIdx != -1 && llIdx+1 < minIdx)
 				{
 					//出现丢帧情况,为了是播放不花屏，要从关键帧发送（针对H264）
-					if ((ss->misH264 && (nkf > 0 || getTimeUnix()-ss->mllCreateTime > duration)) ||
-						ss->mstrVideoType != getVideoType(VideoTypeAVC))
+					if (((ss->misH264 || ss->misH265) && (nkf > 0 || getTimeUnix()-ss->mllCreateTime > duration)) ||
+						(ss->mstrVideoType != getVideoType(VideoTypeAVC) && ss->mstrVideoType != getVideoType(VideoTypeHEVC)))
 					{
 						if (nkf > 0)
 						{
@@ -467,8 +471,8 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 							*s = ss->mavSlice[(maxIdx-minIdx)/2];
 							sliceNum = (maxIdx-minIdx)/2;
 						}
-						logs->debug(">>>>> [CFlvPool::readSlice] readSlice %s 1 jump frame,do not have keyframe ingore.key frame num %d,is h264 %s",
-							ss->mstrUrl.c_str(),nkf,ss->misH264?"true":"false");
+						logs->debug(">>>>> [CFlvPool::readSlice] readSlice %s 1 jump frame,do not have keyframe ingore.key frame num %d,is h264 %s,is h265 %s",
+							ss->mstrUrl.c_str(),nkf,ss->misH264?"true":"false",ss->misH265?"true":"false");
 					}
 					//出现丢帧情况,为了是播放不花屏，要从关键帧发送（针对H264） 结束
 				}
@@ -477,8 +481,8 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 					logs->debug(">>>>> [CFlvPool::readSlice] readSlice %s is real time stream=%s",
 						ss->mstrUrl.c_str(),ss->misRealTimeStream?"true":"false");
 					//出现丢帧情况,为了是播放不花屏，要从关键帧发送（针对H264）
-					if ((ss->misH264 && (nkf > 0 || getTimeUnix()-ss->mllCreateTime > duration)) ||
-						ss->mstrVideoType != getVideoType(VideoTypeAVC))
+					if (((ss->misH264 || ss->misH265) && (nkf > 0 || getTimeUnix()-ss->mllCreateTime > duration)) ||
+						(ss->mstrVideoType != getVideoType(VideoTypeAVC) && ss->mstrVideoType != getVideoType(VideoTypeHEVC)))
 					{
 						if (nkf > 0)
 						{
@@ -523,8 +527,8 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 							*s = ss->mavSlice[(maxIdx-minIdx)/2];
 							sliceNum = (maxIdx-minIdx)/2;
 						}
-						logs->debug(">>>>> [CFlvPool::readSlice] readSlice %s 2 jump frame,do not have keyframe ingore.key frame num %d,is h264 %s",
-							ss->mstrUrl.c_str(),nkf,ss->misH264?"true":"false");
+						logs->debug(">>>>> [CFlvPool::readSlice] readSlice %s 2 jump frame,do not have keyframe ingore.key frame num %d,is h264 %s,is h265 %s",
+							ss->mstrUrl.c_str(),nkf,ss->misH264?"true":"false",ss->misH265?"true":"false");
 					}
 					//出现丢帧情况,为了是播放不花屏，要从关键帧发送（针对H264） 结束
 				}
@@ -717,6 +721,22 @@ bool CFlvPool::isH264(uint32 i,HASH &hash)
 		StreamSlice * ss = iterM->second;
 		ss->mLock.RLock();
 		is = ss->misH264;
+		ss->mLock.UnRLock();
+	}
+	mhashSliceLock[i].UnRLock();
+	return is;
+}
+
+bool CFlvPool::isH265(uint32 i,HASH &hash)
+{
+	bool is = false;
+	mhashSliceLock[i].RLock();
+	MapHashStreamIter iterM = mmapHashSlice[i].find(hash);
+	if (iterM != mmapHashSlice[i].end())
+	{
+		StreamSlice * ss = iterM->second;
+		ss->mLock.RLock();
+		is = ss->misH265;
 		ss->mLock.UnRLock();
 	}
 	mhashSliceLock[i].UnRLock();
@@ -1059,9 +1079,11 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 		ss->mstrHost = s->mstrHost;
 		ss->misRealTimeStream = s->misRealTimeStream;
 		ss->mllCacheTT = s->mllCacheTT;
+		ss->misH264 = s->misH264;
+		ss->misH265 = s->misH265;
 		if (ss->mllCacheTT == 0)
 		{
-			ss->mllCacheTT = 1000*10;
+			ss->mllCacheTT = 1000*5;
 		}
 		
 
@@ -1083,7 +1105,8 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			}
 			else if (s->miDataType == DATA_TYPE_FIRST_VIDEO)
 			{
-				ss->misH264 = true;
+				ss->misH264 = s->misH264;
+				ss->misH265 = s->misH265;
 				ss->mfirstVideoSlice = s;
 				ss->mllFirstVideoIdx = s->mllIndex;
 				logs->debug(">>>>>[handleSlice] task %s new task and recv first video.",ss->mstrUrl.c_str());
@@ -1183,6 +1206,8 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			ss->miAutoBitRateFactor = s->miAutoBitRateFactor;
 			ss->miAutoFrameFactor = s->miAutoFrameFactor;
 			ss->miBufferAbsolutely = s->miBufferAbsolutely;
+			ss->misH264 = s->misH264;
+			ss->misH265 = s->misH265;
 		}
 
 		if (s->misMetaData)
@@ -1225,7 +1250,8 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			{
 				atomicDec(ss->mfirstVideoSlice);
 			}
-			ss->misH264 = true;
+			ss->misH264 = s->misH264;
+			ss->misH265 = s->misH265;
 			ss->mfirstVideoSlice = s;
 			ss->mllFirstVideoIdx = s->mllIndex;
 			logs->debug(">>>>>[handleSlice] task %s task recv first video.",ss->mstrUrl.c_str());
@@ -1305,7 +1331,7 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 				while (!ss->mavSlice.empty())
 				{
 					Slice *st = ss->mavSlice.at(0);
-					if (ss->misH264 && st->miDataType == DATA_TYPE_VIDEO)
+					if ((ss->misH264 || ss->misH265) && st->miDataType == DATA_TYPE_VIDEO)
 					{
 						if (ss->mvKeyFrameIdx.size() == 2 &&
 							ss->maxRelativeDuration < cacheTT*2 &&

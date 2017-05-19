@@ -2839,6 +2839,11 @@ int CRtmpProtocol::writeBuffSize()
 	return mwrBuff->size();
 }
 
+void CRtmpProtocol::setWriteBuffer(int size)
+{
+	mrw->setWriteBuffer(size);
+}
+
 std::string CRtmpProtocol::remoteAddr()
 {
 	return mremoteAddr;

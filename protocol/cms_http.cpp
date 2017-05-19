@@ -1102,6 +1102,11 @@ int CHttp::writeBuffSize()
 	return leftSize;
 }
 
+void CHttp::setWriteBuffer(int size)
+{
+	mrw->setWriteBuffer(size);
+}
+
 std::string CHttp::remoteAddr()
 {
 	return mremoteAddr;

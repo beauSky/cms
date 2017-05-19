@@ -50,9 +50,9 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	{
 		mremoteIP = mremoteAddr.substr(0,pos);
 	}	
-	mrdBuff = new CBufferReader(rw,128*1024);
+	mrdBuff = new CBufferReader(rw,DEFAULT_BUFFER_SIZE);
 	assert(mrdBuff);
-	mwrBuff = new CBufferWriter(rw,128*1024);
+	mwrBuff = new CBufferWriter(rw,DEFAULT_BUFFER_SIZE);
 	assert(mwrBuff);
 	mrw = rw;
 	mrtmp = new CRtmpProtocol(this,rtmpType,mrdBuff,mwrBuff,rw,mremoteAddr);
@@ -66,7 +66,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	miLiveStreamTimeout = 1000*60*10;
 	miNoHashTimeout = 1000*3;
 	misRealTimeStream = false;
-	mllCacheTT = 1000*15;
+	mllCacheTT = 1000*5;
 	misPublish = false;
 	misPlay = false;
 	mllIdx = 0;

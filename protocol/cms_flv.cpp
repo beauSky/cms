@@ -50,7 +50,10 @@ const char *g_VideoType[] = {"0x00 Unknow type",
 	"On2 VP6",
 	"On2 VP6 with alpha channel",
 	"Screen video version 2",
-	"AVC"};
+	"AVC",
+	"0x08 Unknow type",
+	"0x09 Unknow type",
+	"HEVC"};
 
 const int g_AvprivMpeg4audioSampleRates[16] = {
 	96000, 88200, 64000, 48000, 44100, 32000,

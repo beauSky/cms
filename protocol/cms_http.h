@@ -110,6 +110,7 @@ public:
 	int sendMetaData(Slice *s);
 	int sendVideoOrAudio(Slice *s,uint32 uiTimestamp);
 	int writeBuffSize();
+	void setWriteBuffer(int size);
 	std::string remoteAddr();
 	std::string getUrl();
 	void syncIO();

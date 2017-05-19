@@ -26,9 +26,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_PROTOCOL_FLV_H__
 #include <string>
 
-#ifndef VideoTypeAVC
-#define VideoTypeAVC 0x07
+#ifndef CmsVideoTyp
+#define CmsVideoTyp
+#define VideoTypeAVCKey		0x17
+#define VideoTypeAVC		0x07
+#define VideoTypeHEVCKey	0x1A
+#define VideoTypeHEVC		0x0A
 #endif
+
 
 #define BitGet(Number,pos) ((Number)>>(pos)&1)
 std::string getAudioType(unsigned char type);

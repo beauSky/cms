@@ -47,9 +47,9 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	{
 		mremoteIP = mremoteAddr.substr(0,pos);
 	}
-	mrdBuff = new CBufferReader(rw,128*1024);
+	mrdBuff = new CBufferReader(rw,DEFAULT_BUFFER_SIZE);
 	assert(mrdBuff);
-	mwrBuff = new CBufferWriter(rw,128*1024);
+	mwrBuff = new CBufferWriter(rw,DEFAULT_BUFFER_SIZE);
 	assert(mwrBuff);
 	mrw = rw;
 	mhttp = new CHttp(this,mrdBuff,mwrBuff,rw,mremoteAddr,false,isTls);

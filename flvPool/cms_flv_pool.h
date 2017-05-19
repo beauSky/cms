@@ -96,6 +96,9 @@ struct Slice
 		std::string     mstrAudioType;		//音频类型
 		int				miAudioChannelID;	//连麦流音频ID
 
+		bool			misH264;
+		bool			misH265;
+
 		std::string     mstrReferUrl;
 		int64			mllCacheTT;					//缓存时间 毫秒
 		int				miPlayStreamTimeout;		//多久没播放超时时间	
@@ -163,7 +166,8 @@ struct StreamSlice
 		int64						mllFirstVideoIdx          ;
 		Slice						*mfirstAudioSlice;
 		int64						mllFirstAudioIdx;
-		bool						misH264;		
+		bool						misH264;
+		bool						misH265;
 		int64						mllVideoAbsoluteTimestamp;	//用于计算缓存数据
 		int64						mllAudioAbsoluteTimestamp;	//用于计算缓存数据		
 		bool						misHaveMetaData;
@@ -241,6 +245,7 @@ public:
 	int  getFirstVideo(uint32 i,HASH &hash,Slice **s);
 	int  getFirstAudio(uint32 i,HASH &hash,Slice **s);
 	bool isH264(uint32 i,HASH &hash);
+	bool isH265(uint32 i,HASH &hash);
 	int64 getMinIdx(uint32 i,HASH &hash);
 	int64 getMaxIdx(uint32 i,HASH &hash);
 	int	  getMediaRate(uint32 i,HASH &hash);

@@ -427,7 +427,7 @@ int CBufferWriter::flush()
 
 bool CBufferWriter::isUsable()
 {
-	if (mbufferSize <= 128*1024)
+	if (mbufferSize <= DEFAULT_BUFFER_SIZE)
 	{
 		return true;
 	}
