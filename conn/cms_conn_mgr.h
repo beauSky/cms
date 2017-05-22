@@ -34,7 +34,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <queue>
 using namespace std;
 
-#define NUM_OF_THE_CONN_MGR 8
+#define NUM_OF_THE_CONN_MGR 16
 
 class CConnMgr:CDispatch
 {

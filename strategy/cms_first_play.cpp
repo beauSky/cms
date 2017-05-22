@@ -120,9 +120,10 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 	{
 		mdropSliceNum = (mvideoFrameRate+maudioFrameRate)*mfirstPlaySkipMilSecond/1000;		
 		int64 minIdx = CFlvPool::instance()->getMinIdx(mhashIdx,mhash);
-		logs->debug(">>>%s %s first play task %s should drop slice num %d,minIdx=%lld,s->mllIndex=%lld",
+		int64 maxIdx = CFlvPool::instance()->getMaxIdx(mhashIdx,mhash);
+		logs->debug(">>>%s %s first play task %s should drop slice num %d,minIdx=%lld,maxIdx=%lld,s->mllIndex=%lld",
 			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
-			mdropSliceNum,minIdx,s->mllIndex);
+			mdropSliceNum,minIdx,maxIdx,s->mllIndex);
 		if (s->mllIndex-minIdx > (int64)mdropSliceNum)
 		{
 			transIdx = s->mllIndex-(int64)mdropSliceNum-1;
@@ -145,11 +146,12 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 	}
 	else
 	{
+		int64 maxIdx = CFlvPool::instance()->getMaxIdx(mhashIdx,mhash);
 		mdropSliceNum = (mvideoFrameRate+maudioFrameRate)*mfirstPlaySkipMilSecond/1000;
 		mdropSliceNum -= 20;
-		logs->debug(">>>%s %s first play task %s should drop slice num %d",
+		logs->debug(">>>%s %s first play task %s should drop slice num %d,maxIdx=%lld,s->mllIndex=%lld",
 			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
-			mdropSliceNum);
+			mdropSliceNum,maxIdx,s->mllIndex);
 		if (mdropSliceNum > 0)
 		{
 			transIdx = s->mllIndex+(int64)mdropSliceNum+10;

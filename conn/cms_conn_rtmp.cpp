@@ -66,7 +66,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	miLiveStreamTimeout = 1000*60*10;
 	miNoHashTimeout = 1000*3;
 	misRealTimeStream = false;
-	mllCacheTT = 1000*5;
+	mllCacheTT = 1000*10;
 	misPublish = false;
 	misPlay = false;
 	mllIdx = 0;

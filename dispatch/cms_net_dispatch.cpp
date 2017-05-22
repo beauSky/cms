@@ -36,7 +36,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <unistd.h>
 #include <fcntl.h>
 
-#define MaxDispatchNum 3000
+#define MaxDispatchNum 1024
 #define VDSPtr vector<CDispatch*>*
 #define MapTcpListenIter map<int,TCPListener *>::iterator
 
