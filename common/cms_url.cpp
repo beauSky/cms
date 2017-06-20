@@ -113,3 +113,15 @@ bool parseUrl(std::string url,LinkUrl &linkUrl)
 		linkUrl.host.c_str(),linkUrl.port,linkUrl.app.c_str(),linkUrl.instanceName.c_str(),linkUrl.uri.c_str());
 	return true;
 }
+
+void resetLinkUrl(LinkUrl *linkUrl)
+{
+	linkUrl->protocol.clear();
+	linkUrl->host.clear();
+	linkUrl->addr.clear();
+	linkUrl->port = 0;
+	linkUrl->isDefault = false;
+	linkUrl->app.clear();
+	linkUrl->instanceName.clear();
+	linkUrl->uri.clear();
+}

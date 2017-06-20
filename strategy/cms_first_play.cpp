@@ -90,8 +90,8 @@ bool CFirstPlay::checkfirstPlay()
 bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 {
 	if (!(mfirstPlaySkipMilSecond > 0 && transIdx == -1 &&
-			(s->mData[0] == VideoTypeAVCKey && CFlvPool::instance()->isH264(mhashIdx,mhash) ||
-			 s->mData[0] == VideoTypeHEVCKey && CFlvPool::instance()->isH265(mhashIdx,mhash))/* &&
+			((s->mData[0] == VideoTypeAVCKey && CFlvPool::instance()->isH264(mhashIdx,mhash)) ||
+			 (s->mData[0] == VideoTypeHEVCKey && CFlvPool::instance()->isH265(mhashIdx,mhash)))/* &&
 		CFlvPool::instance()->getMediaRate(mhashIdx,mhash) > FIRST_DROP_MEDIA_RATE*/))
 	{		
 		return true;

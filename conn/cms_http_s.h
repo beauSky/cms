@@ -48,19 +48,23 @@ public:
 	cms_net_ev    *evReadIO();
 	cms_net_ev    *evWriteIO();
 	void down8upBytes();
-
-	int doDecode();
-	int doReadData(){return CMS_OK;};
-	int doTransmission();
-	int sendBefore(const char *data,int len);
-
-	int doRead(bool isTimeout);
-	int doWrite(bool isTimeout);
+	void reset();
+	int  doDecode();
+	int  doReadData(){return CMS_OK;};
+	int  doTransmission();
+	int  sendBefore(const char *data,int len);
+	bool isFinish();
+	int  doRead(bool isTimeout);
+	int  doWrite(bool isTimeout);
 private:
 	int  handle();
+	int  handleCrossDomain(int &ret);
 	int	 handleFlv(int &ret);
-	int handleQuery(int &ret);
+	int  handleQuery(int &ret);
+	int  handleM3U8(int &ret);
+	int  handleTS(int &ret);
 	void makeHash();
+	void makeHash(std::string url);
 	void tryCreateTask();
 	
 	cms_net_ev	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
@@ -72,12 +76,15 @@ private:
 	std::string		mreferer;
 	std::string		mremoteAddr;
 	std::string		mremoteIP;
+	std::string		mlocalAddr;
+	std::string		mlocalIP;
 	std::string		mHost;
 	HASH			mHash;
 	uint32          mHashIdx;
 	std::string		mstrHash;
 	bool			misAddConn;		//是否发送数据的连接
 	bool			misFlvRequest;
+	bool			misM3U8TSRequest;
 	bool			misStop;
 
 	int64           mllIdx;

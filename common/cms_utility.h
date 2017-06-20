@@ -52,6 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stdlib.h>
 #define gettid() syscall(__NR_gettid)
 #define _atoi64(val) strtoll(val, NULL, 10)
+#define str2float(val) strtod(val,NULL)
 #define hex2int64(val) strtoll(val, NULL, 16)
 #define cmsSleep(e) usleep(e*1000)
 #endif /* posix end */

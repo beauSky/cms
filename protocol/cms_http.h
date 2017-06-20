@@ -51,6 +51,7 @@ public:
 	std::string getRemoteAddr();
 	void		setRefer(std::string refer);
 	bool		parseHeader(const char *header,int len);
+	void		reset();
 private:
 	std::string		mremoteAddr;
 	std::string		mmethod;
@@ -77,6 +78,7 @@ public:
 	void		setRemoteAddr(std::string addr);
 	bool		parseHeader(const char *header,int len);
 	std::string getResponse();
+	void		reset();
 private:
 	std::string		moriUrl;
 	std::string		mremoteAddr;
@@ -118,9 +120,11 @@ public:
 	cms_timer *cmsTimer2Write();
 	cms_timer *cmsTimer2Read();
 private:
-	void		doWriteTimeout();
-	void		doReadTimeout();
-	int 		readChunkedRN();		
+	void doWriteTimeout();
+	void doReadTimeout();
+	int  readChunkedRN();	
+	void reset();
+
 	//tls µÄ¶«Î÷
 	bool			misTls;
 	CSSL			*mssl;

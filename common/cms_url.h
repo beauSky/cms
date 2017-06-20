@@ -45,4 +45,5 @@ typedef struct _LinkUrl
 }LinkUrl;
 
 bool parseUrl(std::string url,LinkUrl &linkUrl);
+void resetLinkUrl(LinkUrl *linkUrl);
 #endif

@@ -27,6 +27,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <conn/cms_conn_mgr.h>
 #include <dispatch/cms_net_dispatch.h>
 #include <dnscache/cms_dns_cache.h>
+#include <ts/cms_hls_mgr.h>
 #include <common/cms_shmmgr.h>
 #include <app/cms_server.h>
 #include <flvPool/cms_flv_pool.h>
@@ -50,7 +51,7 @@ map<string,string> mapAgrv;
 
 void sample(char *app)
 {
-	printf("##### useage: %s -c config.json\n", app);
+	printf("##### useage: %s -d [debug/nodebug] -c config.json\n", app);
 }
 
 void inorgSignal()
@@ -129,6 +130,7 @@ void initInstance()
 	CTaskMgr::instance();
 	CStatic::instance();
 	CNetMgr::instance();
+	CMissionMgr::instance();
 }
 
 void parseVar(int num,char **argv)
@@ -180,17 +182,17 @@ int main(int argc,char *argv[])
 		return 0;
 	}
 	parseVar(argc-1,argv+1);
-	string daemons = getVar(ParamDaemon);
-	if (daemons != "debug")
-	{
-		daemon();
-	}
 	string config = getVar(ParamConfig);
 	if (config.empty())
 	{
 		sample(argv[0]);
 		return 0;
 	}
+	string daemons = getVar(ParamDaemon);
+	if (daemons != "debug")
+	{
+		daemon();
+	}	
 	inorgSignal();	
 	if (!CConfig::instance()->init(config.c_str()))
 	{
@@ -216,6 +218,12 @@ int main(int argc,char *argv[])
 	if (!CFlvPool::instance()->run())
 	{
 		logs->error("*** CFlvPool::instance()->run() fail ***");
+		cmsSleep(1000*3);
+		return 0;
+	}
+	if (!CMissionMgr::instance()->run())
+	{
+		logs->error("*** CMissionMgr::instance()->run() fail ***");
 		cmsSleep(1000*3);
 		return 0;
 	}

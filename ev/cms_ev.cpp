@@ -156,10 +156,11 @@ void *cms_timer_read_thread(void *param)
 	return NULL;
 }
 
-void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb,bool isWrite/* = true*/)
+void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb,bool isWrite/* = true*/,int64 uid /*= 0*/)
 {
 	assert(ct != NULL);
 	ct->fd = fd;
+	ct->uid = uid;
 	ct->cb = cb;
 	if (isWrite)
 	{

@@ -290,6 +290,18 @@ bool Request::parseHeader(const char *header,int len)
 	return true;
 }
 
+void Request::reset()
+{
+	mremoteAddr.clear();
+	mmethod.clear();
+	resetLinkUrl(&mlinkUrl);
+	murl.clear();
+	mreferUrl.clear();
+	mmapHeader.clear();
+	mmapParam.clear();
+	mhost.clear();
+}
+
 Response::Response()
 {
 
@@ -396,6 +408,17 @@ bool Response::parseHeader(const char *header,int len)
 		}
 	}
 	return true;
+}
+
+void Response::reset()
+{
+	moriUrl.clear();
+	mremoteAddr.clear();
+	mstatus.clear();
+	mstatusCode = 0;
+	mproto.clear();
+	moriRsp.clear();
+	mmapHeader.clear();
 }
 
 CHttp::CHttp(Conn *super,CBufferReader *rd,
@@ -696,7 +719,7 @@ int CHttp::want2Write(bool isTimeout)
 				}
 				if (!mssl->isUsable())
 				{
-					//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
+					//如果CBufferWriter还有可观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
 					doWriteTimeout();
 					return CMS_OK;
 				}
@@ -712,10 +735,16 @@ int CHttp::want2Write(bool isTimeout)
 				}
 				if (!mwrBuff->isUsable())
 				{
-					//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
+					//如果CBufferWriter还有可观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
 					doWriteTimeout();
 					return CMS_OK;
 				}				
+			}
+			if (mwrBuff->size() == 0 && msuper->isFinish())
+			{
+				reset();
+				msuper->reset();
+				return CMS_OK;
 			}
 			ret = msuper->doTransmission();
 			if (ret < 0)
@@ -734,6 +763,26 @@ int CHttp::want2Write(bool isTimeout)
 		}
 	}
 	return CMS_OK;
+}
+
+void CHttp::reset()
+{
+	mrequest->reset();
+	mresponse->reset();
+	misReadHeader = false;
+	misWriteHeader = false;
+	mheaderEnd = 0;
+	mstrHeader.clear();
+
+	misChunked = false;;
+	mchunkedLen = 0;
+	misReadChunkedLen = false;
+	mchunkBytesRN.clear();
+	mchunkedReadrRN = 0;
+
+	msendRequestLen = 0;
+	misReadReuqest = false;
+	mstrRequestHeader.clear();
 }
 
 int CHttp::read(char **data,int &len)

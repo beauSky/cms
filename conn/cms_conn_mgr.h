@@ -39,6 +39,9 @@ using namespace std;
 class CConnMgr:CDispatch
 {
 public:
+	CConnMgr(int i);
+	~CConnMgr();
+
 	bool run();
 	void stop();
 	void thread();
@@ -55,6 +58,7 @@ private:
 	CRWlock mfdConnLock;
 
 	bool misRun;
+	int  mthreadIdx;
 	cms_thread_t mtid;
 	queue<FdEvents *> mqueue;
 	CLock mqueueLock;

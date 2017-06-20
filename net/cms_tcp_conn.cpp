@@ -52,7 +52,22 @@ TCPConn::TCPConn(int fd)
 		ipInt2ipStr(from.sin_addr.s_addr,szIP);
 		char tmp[23] = {0};
 		snprintf(tmp,sizeof(tmp),"%s:%d",szIP,ntohs(from.sin_port));
-		maddr = tmp;
+		mraddr = tmp;
+	}
+	else
+	{
+		logs->error("*** [TCPConn::TCPConn] getpeername fail,errno=%d,strerr=%s ***",errno,strerror(errno));
+	}
+	sockaddr_in saddr;
+	memset(&saddr,0,sizeof(saddr));
+	len = sizeof(saddr);
+
+	if (getsockname(mfd,(sockaddr*)&saddr,&len) != -1)
+	{
+		char szAddr[25] = {0};
+		ipInt2ipStr(saddr.sin_addr.s_addr,szAddr);
+		mladdr = szAddr;
+		logs->info("##### TCPConn accept local addr %s fd=%d #####",mladdr.c_str(),mfd);
 	}
 	else
 	{
@@ -116,8 +131,8 @@ int   TCPConn::dialTcp(char *addr,ConnType connectType)
 	char szAddr[25] = {0};
 	ipInt2ipStr(ip,szAddr);
 	snprintf(szAddr+strlen(szAddr),sizeof(szAddr)-strlen(szAddr),":%d",port);
-	maddr = szAddr;
-	logs->info("##### TCPConn dialTcp addr %s fd=%d #####",maddr.c_str(),mfd);
+	mraddr = szAddr;
+	logs->info("##### TCPConn dialTcp addr %s fd=%d #####",mraddr.c_str(),mfd);
 	return CMS_OK;
 }
 
@@ -131,9 +146,19 @@ int	  TCPConn::connect()
 			logs->error("*** [TCPConn::connect] connect socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
 			::close(mfd);
 			return CMS_ERROR;
-		}		
+		}
+		sockaddr_in saddr;
+		memset(&saddr,0,sizeof(saddr));
+		socklen_t len = sizeof(saddr);
+		if (getsockname(mfd,(sockaddr*)&saddr,&len) != -1)
+		{
+			char szAddr[25] = {0};
+			ipInt2ipStr(saddr.sin_addr.s_addr,szAddr);
+			mladdr = szAddr;
+			logs->info("##### TCPConn connect local addr %s fd=%d #####",mraddr.c_str(),mfd);
+		}
 	}
-	logs->info("##### TCPConn connect addr %s succ #####",maddr.c_str());
+	logs->info("##### TCPConn connect ddr %s succ #####",mladdr.c_str());
 	return CMS_OK;
 }
 
@@ -174,7 +199,7 @@ int   TCPConn::write(char *srcBuf,int len,int &nwrite)
 		}
 		else
 		{
-			//logs->info("##### TCPConn write addr %s fail,fd=%d #####",maddr.c_str(),mfd);
+			//logs->info("##### TCPConn write addr %s fail,fd=%d #####",mraddr.c_str(),mfd);
 			merrcode = errno;
 		}
 		return CMS_ERROR;
@@ -209,9 +234,15 @@ int	TCPConn::setWriteBuffer(int size)
 	return setsockopt(mfd, IPPROTO_TCP, SO_SNDBUF, (void *)&size, sizeof(size));
 }
 
-int   TCPConn::remoteAddr(char *addr,int len)
+int TCPConn::remoteAddr(char *addr,int len)
 {
-	memcpy(addr,maddr.c_str(),cmsMin(len,(int)maddr.length())); 
+	memcpy(addr,mraddr.c_str(),cmsMin(len,(int)mraddr.length())); 
+	return CMS_OK;
+}
+
+int TCPConn::localAddr(char *addr,int len)
+{
+	memcpy(addr,mladdr.c_str(),cmsMin(len,(int)mladdr.length())); 
 	return CMS_OK;
 }
 

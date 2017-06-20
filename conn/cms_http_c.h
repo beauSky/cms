@@ -69,6 +69,8 @@ public:
 	int doReadData();
 	int doTransmission();
 	int sendBefore(const char *data,int len);
+	bool isFinish(){return false;};
+	void reset(){};
 
 	int doRead(bool isTimeout);
 	int doWrite(bool isTimeout);

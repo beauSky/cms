@@ -55,6 +55,8 @@ public:
 	int doReadData(){return CMS_OK;};
 	int doTransmission();
 	int sendBefore(const char *data,int len){return 0;};
+	bool isFinish(){return false;};
+	void reset(){};
 	void down8upBytes();
 
 	//stream info ½Ó¿Ú
@@ -145,5 +147,7 @@ private:
 	int64			mcreateTT;
 
 	int64			mtimeoutTick;
+
+	bool			misCreateHls;
 };
 #endif

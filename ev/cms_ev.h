@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __CMS_EV_H__
 #define __CMS_EV_H__
 #include <common/cms_var.h>
+#include <common/cms_type.h>
 #include <net/cms_net_var.h>
 
 void atomicInc(cms_timer *ct);
@@ -33,7 +34,7 @@ void atomicDec(cms_timer *ct);
 cms_timer *mallcoCmsTimer();
 void	   freeCmsTimer(cms_timer *ct);
 
-void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb,bool isWrite = true);
+void cms_timer_init(cms_timer *ct,int fd,cms_timer_cb cb,bool isWrite = true,int64 uid = 0);
 void cms_timer_start(cms_timer *ct,bool isWrite = true);
 void wait2ReadEV(void *t);
 void wait2WriteEV(void *t);

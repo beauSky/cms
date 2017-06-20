@@ -28,10 +28,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <dispatch/cms_net_dispatch.h>
 #include <ev/cms_ev.h>
 #include <conn/cms_http_c.h>
+#include <errno.h>
 #include <assert.h>
 
 
 #define MapConnInter map<int,Conn *>::iterator
+
+CConnMgr::CConnMgr(int i)
+{
+	mthreadIdx = i;
+}
+
+CConnMgr::~CConnMgr()
+{
+
+}
 
 void CConnMgr::addOneConn(int fd,Conn *c)
 {
@@ -166,6 +177,15 @@ void *CConnMgr::routinue(void *param)
 void CConnMgr::thread()
 {
 	logs->debug("### CConnMgr thread=%d ###", gettid());
+
+	cpu_set_t mask;
+	CPU_ZERO(&mask);
+	CPU_SET(mthreadIdx, &mask);
+	if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
+	{
+		logs->error("*****[CConnMgr::thread] set thread affinity failed,err=%d,errstring=%s *****",errno,strerror(errno));
+	}
+
 	FdEvents *fe;
 	while (misRun)
 	{
@@ -198,9 +218,15 @@ CConnMgrInterface *CConnMgrInterface::minstance = NULL;
 CConnMgrInterface::CConnMgrInterface()
 {
 	misRun = false;
-	for (int i =0; i < NUM_OF_THE_CONN_MGR;i ++)
+	int num = sysconf(_SC_NPROCESSORS_CONF);
+	logs->debug("######## system has %d processor(s) #########", num);
+	if (num < NUM_OF_THE_CONN_MGR)
 	{
-		mconnMgrArray[i] = new CConnMgr();
+		num = NUM_OF_THE_CONN_MGR;
+	}
+	for (int i =0; i < num;i ++)
+	{
+		mconnMgrArray[i] = new CConnMgr(i%num);
 		assert(mconnMgrArray[i]->run());
 	}
 }

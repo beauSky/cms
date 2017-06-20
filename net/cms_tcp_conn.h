@@ -54,6 +54,7 @@ public:
 	void  close();
 	int   fd();
 	int   remoteAddr(char *addr,int len);
+	int   localAddr(char *addr,int len);
 	void  setReadTimeout(long long readTimeout);
 	long long getReadTimeout();
 	void  setWriteTimeout(long long writeTimeout);
@@ -69,7 +70,8 @@ public:
 private:
 	int mfd;
 	struct sockaddr_in mto;
-	string maddr;
+	string mraddr;
+	string mladdr;
 	long long mreadTimeout;
 	long long mreadBytes;
 	long long mwriteTimetou;

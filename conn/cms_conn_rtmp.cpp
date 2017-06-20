@@ -32,6 +32,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <static/cms_static.h>
 #include <net/cms_net_mgr.h>
 #include <enc/cms_sha1.h>
+#include <ts/cms_hls_mgr.h>
 #include <assert.h>
 #include <stdlib.h>
 using namespace std;
@@ -102,6 +103,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	{
 		setPushUrl(pushUrl);
 	}
+	misCreateHls = false;
 }
 
 CConnRtmp::~CConnRtmp()
@@ -198,6 +200,12 @@ int CConnRtmp::stop(std::string reason)
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),reason.c_str());
 	}
 	misStop = true;
+
+	if (misCreateHls)
+	{
+		CMissionMgr::instance()->destroy(mHash);
+	}
+
 	return CMS_OK;
 }
 
@@ -438,6 +446,29 @@ int  CConnRtmp::decodeVideo(RtmpMessage *msg,bool &isSave)
 		isSave = true;
 		misPushFlv = true;
 	}
+	if (!misCreateHls)
+	{
+		misCreateHls = true;
+		LinkUrl linkUrl;
+		parseUrl(murl,linkUrl);
+		std::string hlsUrl;
+		hlsUrl = "http://" + linkUrl.host;
+		hlsUrl += "/" + linkUrl.app;
+		hlsUrl += "/";
+		size_t pos = linkUrl.instanceName.find("?");
+		if (pos != std::string::npos)
+		{
+			hlsUrl += linkUrl.instanceName.substr(0,pos);
+		}
+		else
+		{
+			hlsUrl += linkUrl.instanceName;
+		}
+		hlsUrl += "/online.m3u8";
+		logs->debug("%s [CConnRtmp::decodeVideoAudio] %s rtmp %s m3u8 url %s",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),hlsUrl.c_str());
+		CMissionMgr::instance()->create(mHashIdx,mHash,hlsUrl,3,3,5);
+	}
 	return CMS_OK;
 }
 
@@ -452,6 +483,30 @@ int  CConnRtmp::decodeAudio(RtmpMessage *msg,bool &isSave)
 	{
 		isSave = true;
 		misPushFlv = true;
+	}
+
+	if (!misCreateHls)
+	{
+		misCreateHls = true;
+		LinkUrl linkUrl;
+		parseUrl(murl,linkUrl);
+		std::string hlsUrl;
+		hlsUrl = "http://" + linkUrl.host;
+		hlsUrl += "/" + linkUrl.app;
+		hlsUrl += "/";
+		size_t pos = linkUrl.instanceName.find("?");
+		if (pos != std::string::npos)
+		{
+			hlsUrl += linkUrl.instanceName.substr(0,pos);
+		}
+		else
+		{
+			hlsUrl += linkUrl.instanceName;
+		}
+		hlsUrl += "/online.m3u8";
+		logs->debug("%s [CConnRtmp::decodeVideoAudio] %s rtmp %s m3u8 url %s",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),hlsUrl.c_str());
+		CMissionMgr::instance()->create(mHashIdx,mHash,hlsUrl,3,3,5);
 	}
 	return CMS_OK;
 }
@@ -573,6 +628,8 @@ int CConnRtmp::decodeSetDataFrame(amf0::Amf0Block *block)
 	amf0::amf0BlockPush(blockMetaData,objectEcma);
 
 	std::string strMetaData = amf0::amf0Block2String(blockMetaData);
+
+	amf0::amf0BlockRelease(blockMetaData);
 
 	int len = strMetaData.length();
 	char *dm = new char[len];

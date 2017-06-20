@@ -44,11 +44,14 @@ public:
 
 	virtual void down8upBytes() = 0;
 
+	virtual void reset() = 0;
+
 	//http สนำร
-	virtual int doDecode() = 0;
-	virtual int doReadData() = 0; //http client
-	virtual int doTransmission() = 0; //http server
-	virtual int sendBefore(const char *data,int len) = 0;
+	virtual int  doDecode() = 0;
+	virtual int  doReadData() = 0; //http client
+	virtual int  doTransmission() = 0; //http server
+	virtual int  sendBefore(const char *data,int len) = 0;
+	virtual bool isFinish() = 0;
 };
 
 #endif

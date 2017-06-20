@@ -31,13 +31,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <taskmgr/cms_task_mgr.h>
 #include <static/cms_static.h>
 #include <net/cms_net_mgr.h>
+#include <ts/cms_hls_mgr.h>
+#include <regex.h>
 
+std::string gCrossDomainRsp = "HTTP/1.1 200 OK\r\nServer: quick rtmp\r\nConnection: keep-alive\r\nContent-Length: 189\r\nContent-Type: text/xml\r\n\r\n<?xml version=\"1.0\"?><!DOCTYPE cross-domain-policy SYSTEM \"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd\"><cross-domain-policy><allow-access-from domain=\"*\" /></cross-domain-policy>";
 
 CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 {
-	char remote[23] = {0};
-	rw->remoteAddr(remote,sizeof(remote));
-	mremoteAddr = remote;
+	char szaddr[23] = {0};
+	rw->remoteAddr(szaddr,sizeof(szaddr));
+	mremoteAddr = szaddr;
 	size_t pos = mremoteAddr.find(":");
 	if (pos == string::npos)
 	{
@@ -47,6 +50,19 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	{
 		mremoteIP = mremoteAddr.substr(0,pos);
 	}
+	memset(szaddr,0,sizeof(szaddr));
+	rw->localAddr(szaddr,sizeof(szaddr));
+	mlocalAddr = szaddr;
+	pos = mlocalAddr.find(":");
+	if (pos == string::npos)
+	{
+		mlocalIP = mlocalAddr;
+	}
+	else
+	{
+		mlocalIP = mlocalAddr.substr(0,pos);
+	}
+
 	mrdBuff = new CBufferReader(rw,DEFAULT_BUFFER_SIZE);
 	assert(mrdBuff);
 	mwrBuff = new CBufferWriter(rw,DEFAULT_BUFFER_SIZE);
@@ -62,6 +78,7 @@ CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 	mbinaryWriter = NULL;
 	misAddConn = false;
 	misFlvRequest = false;
+	misM3U8TSRequest = false;
 	misStop = false;
 
 	mspeedTick = 0;
@@ -101,6 +118,13 @@ CHttpServer::~CHttpServer()
 	}
 	mrw->close();
 	delete mrw;
+}
+
+void CHttpServer::reset()
+{
+	misDecodeHeader = false;
+	misFlvRequest = false;;
+	misM3U8TSRequest = false;
 }
 
 int CHttpServer::doit()
@@ -310,6 +334,10 @@ int CHttpServer::handle()
 	int ret = CMS_OK;
 	do 
 	{
+		if (handleCrossDomain(ret) != 0)
+		{
+			break;
+		}
 		if (handleFlv(ret) != 0)
 		{
 			break;
@@ -318,11 +346,38 @@ int CHttpServer::handle()
 		{
 			break;
 		}
+
+		if (handleM3U8(ret) != 0)
+		{
+			break;
+		}
+		if (handleTS(ret) != 0)
+		{
+			break;
+		}
 		logs->warn("***** %s [CHttpServer::handleFlv] http %s unknow request *****",
 			mremoteAddr.c_str(),murl.c_str());
 		ret = CMS_ERROR;
 	} while (0);
 	return ret;
+}
+
+int CHttpServer::handleCrossDomain(int &ret)
+{
+	if (murl.find("crossdomain.xml") != string::npos)
+	{
+		ret = sendBefore(gCrossDomainRsp.c_str(),gCrossDomainRsp.length());
+		if (ret < 0)
+		{
+			logs->error("*** %s [CHttpServer::handleCrossDomain] http %s send header fail ***",
+				mremoteAddr.c_str(),murl.c_str());
+			ret = CMS_ERROR;
+			return CMS_ERROR;
+		}
+		ret = CMS_OK;
+		return 1;
+	}
+	return 0;
 }
 
 int	CHttpServer::handleFlv(int &ret)
@@ -467,6 +522,213 @@ int CHttpServer::handleQuery(int &ret)
 	return 0;
 }
 
+int  CHttpServer::handleM3U8(int &ret)
+{
+	static char pattern[] = "[0-9A-Za-z_]+/online.m3u8";
+	size_t nmatch = 1;
+	regmatch_t pm[1];
+	regex_t reg;
+	regcomp(&reg,pattern,REG_EXTENDED|REG_NOSUB);
+	int r = regexec(&reg,murl.c_str(),nmatch,pm,REG_NOTBOL);
+	regfree(&reg);
+	if (r != REG_NOMATCH)
+	{
+		logs->debug(" %s [CHttpServer::handleM3U8] http %s is m3u8 request.",
+			mremoteAddr.c_str(),murl.c_str());
+		misM3U8TSRequest = true;
+		LinkUrl linkUrl;
+		if (!parseUrl(murl,linkUrl))
+		{
+			logs->error("***** %s [CHttpServer::handleM3U8] http %s parse url fail *****",
+				mremoteAddr.c_str(),murl.c_str());
+			ret = CMS_ERROR;
+			return CMS_ERROR;
+		}
+		if (isLegalIp(linkUrl.host.c_str()))
+		{
+			//302 µØÖ·
+			murl = "http://";
+			murl += linkUrl.app;
+			murl += "/";
+			murl += linkUrl.instanceName;
+			logs->debug(">>> %s [CHttpServer::handleM3U8] http 302 ip url %s ",
+				mremoteAddr.c_str(),murl.c_str());
+			if (!parseUrl(murl,linkUrl))
+			{
+				logs->error("*** %s [CHttpServer::handleM3U8] http 302 url %s parse fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+		}
+		mreferer = mhttp->httpRequest()->getHeader(HTTP_HEADER_REQ_REFERER);
+
+		std::string url = murl;
+		size_t pos = url.rfind("/");
+		if (pos != std::string::npos)
+		{
+			url = url.substr(0,pos);
+		}
+		makeHash(url);
+		std::string outData;
+		int64 outTT;
+		int ret = CMissionMgr::instance()->readM3U8(mHash,murl,mlocalIP,outData,outTT);
+		if (ret > 0)
+		{
+			logs->debug(">>> %s [CHttpServer::handleM3U8] %s m3u8\n %s ",
+				mremoteAddr.c_str(),murl.c_str(),outData.c_str());
+
+			char szLength[20] = {0};
+			snprintf(szLength,sizeof(szLength),"%lu",outData.length());
+			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"application/vnd.apple.mpegurl");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
+
+			std::string strRspHeader = mhttp->httpResponse()->readResponse();
+			strRspHeader += outData;
+			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			if (ret < 0)
+			{
+				logs->error("*** %s [CHttpServer::handleM3U8] http %s send header fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+			ret = CMS_OK;
+		}
+		else
+		{
+			char szLength[20] = {0};
+			snprintf(szLength,sizeof(szLength),"%d",0);
+			mhttp->httpResponse()->setStatus(HTTP_CODE_404,"Not Found");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
+			std::string strRspHeader = mhttp->httpResponse()->readResponse();
+			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			if (ret < 0)
+			{
+				logs->error("*** %s [CHttpServer::handleM3U8] http %s send header fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+			ret = CMS_OK;
+		}
+		mtimeoutTick = getTimeUnix();
+		return 1;
+	}
+	return 0;
+}
+
+int  CHttpServer::handleTS(int &ret)
+{
+	static char pattern[] = "[0-9A-Za-z]+/[0-9]+.ts";
+	size_t nmatch = 1;
+	regmatch_t pm[1];
+	regex_t reg;
+	regcomp(&reg,pattern,REG_EXTENDED|REG_NOSUB);
+	int r = regexec(&reg,murl.c_str(),nmatch,pm,REG_NOTBOL);
+	regfree(&reg);
+	if (r != REG_NOMATCH)
+	{
+		logs->debug(" %s [CHttpServer::handleTS] http %s is ts request.",
+			mremoteAddr.c_str(),murl.c_str());
+		misM3U8TSRequest = true;
+		LinkUrl linkUrl;
+		if (!parseUrl(murl,linkUrl))
+		{
+			logs->error("***** %s [CHttpServer::handleTS] http %s parse url fail *****",
+				mremoteAddr.c_str(),murl.c_str());
+			ret = CMS_ERROR;
+			return CMS_ERROR;
+		}
+		if (isLegalIp(linkUrl.host.c_str()))
+		{
+			//302 µØÖ·
+			murl = "http://";
+			murl += linkUrl.app;
+			murl += "/";
+			murl += linkUrl.instanceName;
+			logs->debug(">>> %s [CHttpServer::handleTS] http 302 ip url %s ",
+				mremoteAddr.c_str(),murl.c_str());
+			if (!parseUrl(murl,linkUrl))
+			{
+				logs->error("*** %s [CHttpServer::handleTS] http 302 url %s parse fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+		}
+		mreferer = mhttp->httpRequest()->getHeader(HTTP_HEADER_REQ_REFERER);
+
+		std::string url = murl;
+		size_t pos = url.rfind("/");
+		if (pos != std::string::npos)
+		{
+			url = url.substr(0,pos);
+		}
+		makeHash(url);
+		int64 outTT;
+		SSlice *ss;
+		int ret = CMissionMgr::instance()->readTS(mHash,murl,mlocalIP,&ss,outTT);
+		if (ret > 0)
+		{
+			char szLength[20] = {0};
+			snprintf(szLength,sizeof(szLength),"%d",ss->msliceLen);
+			logs->debug(" %s [CHttpServer::handleTS] http %s ts size %d",
+				mremoteAddr.c_str(),murl.c_str(),ss->msliceLen);
+			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"video/mp2t");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
+			std::string strRspHeader = mhttp->httpResponse()->readResponse();
+			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			if (ret < 0)
+			{
+				logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+			ret = sendBefore(ss->mslice,ss->msliceLen);
+			if (ret < 0)
+			{
+				logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+			atomicDec(ss);
+			ret = CMS_OK;
+		}else
+		{
+			char szLength[20] = {0};
+			snprintf(szLength,sizeof(szLength),"%d",0);
+			mhttp->httpResponse()->setStatus(HTTP_CODE_404,"Not Found");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
+			std::string strRspHeader = mhttp->httpResponse()->readResponse();
+			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			if (ret < 0)
+			{
+				logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
+					mremoteAddr.c_str(),murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+			ret = CMS_OK;
+		}
+		mtimeoutTick = getTimeUnix();
+		return 1;
+	}
+	return 0;
+}
+
 int CHttpServer::doTransmission()
 {
 	int ret = 1;
@@ -548,6 +810,15 @@ int CHttpServer::sendBefore(const char *data,int len)
 	return mhttp->write(data,len);
 }
 
+bool CHttpServer::isFinish()
+{
+	if (misM3U8TSRequest)
+	{
+		return true;
+	}
+	return false;
+}
+
 void CHttpServer::makeHash()
 {
 	string hashUrl = readHashUrl(murl);
@@ -560,6 +831,19 @@ void CHttpServer::makeHash()
 	logs->debug("%s [CHttpServer::makeHash] hash url %s,hash=%s",
 		mremoteAddr.c_str(),hashUrl.c_str(),mstrHash.c_str());
 	mflvTrans->setHash(mHashIdx,mHash);
+}
+
+void CHttpServer::makeHash(std::string url)
+{
+	string hashUrl = readHashUrl(url);
+	CSHA1 sha;
+	sha.write(hashUrl.c_str(), hashUrl.length());
+	string strHash = sha.read();
+	mHash = HASH((char *)strHash.c_str());
+	mstrHash = hash2Char(mHash.data);
+	mHashIdx = CFlvPool::instance()->hashIdx(mHash);
+	logs->debug("%s [CHttpServer::makeHash] 1 hash url %s,hash=%s",
+		mremoteAddr.c_str(),hashUrl.c_str(),mstrHash.c_str());
 }
 
 void CHttpServer::tryCreateTask()
