@@ -224,6 +224,7 @@ enum RtmpCommand
 #define 	StatusCodeStreamStreamNotFound  "NetStream.Play.StreamNotFound"
 #define 	StatusCodeDataStart             "NetStream.Data.Start"
 #define 	StatusCodeUnpublishSuccess      "NetStream.Unpublish.Success"
+#define		StatusCodeCallFail              "NetConnection.Call.Failed"
 	//description
 #define 	DescriptionConnectionSucceeded  "Connection succeeded."
 #define 	DescriptionConnectionRejected   "Connection rejected."

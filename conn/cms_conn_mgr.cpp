@@ -46,20 +46,26 @@ CConnMgr::~CConnMgr()
 
 void CConnMgr::addOneConn(int fd,Conn *c)
 {
+	bool isSucc = false;
 	mfdConnLock.WLock();
 	MapConnInter it = mfdConn.find(fd);
 	assert(it == mfdConn.end());
 	if (it == mfdConn.end())
 	{
 		mfdConn.insert(make_pair(fd,c));
+		isSucc = true;
 	}
 	mfdConnLock.UnWLock();
 
-	CNetDispatch::instance()->addOneDispatch(fd,this);
+	if (isSucc)
+	{
+		CNetDispatch::instance()->addOneDispatch(fd,this);
+	}	
 }
 
 void CConnMgr::delOneConn(int fd)
 {
+	CNetDispatch::instance()->delOneDispatch(fd);
 	mfdConnLock.WLock();
 	MapConnInter it = mfdConn.find(fd);
 	if (it != mfdConn.end())
@@ -70,13 +76,20 @@ void CConnMgr::delOneConn(int fd)
 			delete it->second;
 		}
 	}
-	mfdConnLock.UnWLock();
-
-	CNetDispatch::instance()->delOneDispatch(fd);
+	mfdConnLock.UnWLock();	
 }
+
+//TEST
+std::map<unsigned long,unsigned long> gmapCSendTakeTime;
+int64 gCSendTakeTimeTT = getTimeUnix();
+CLock gCSendTakeTime;
+//TEST end
 
 void CConnMgr::dispatchEv(FdEvents *fe)
 {
+	unsigned long tB = getTickCount();
+
+
 	bool isSucc = true;
 	mfdConnLock.RLock();
 	MapConnInter it = mfdConn.find(fe->fd);
@@ -95,6 +108,18 @@ void CConnMgr::dispatchEv(FdEvents *fe)
 	{
 		delOneConn(fe->fd);
 	}
+
+	unsigned long tE = getTickCount();
+	gCSendTakeTime.Lock();
+	int64 sendTakeTimeTT = getTimeUnix();
+	bool isPrintf = false;
+	if (sendTakeTimeTT - gCSendTakeTimeTT > 60)
+	{
+		isPrintf = true;
+		gCSendTakeTimeTT = sendTakeTimeTT;
+	}
+	printTakeTime(gmapCSendTakeTime,tB,tE,"CConnMgr",isPrintf);
+	gCSendTakeTime.Unlock();
 }
 
 void  CConnMgr::pushEv(int fd,int events,cms_net_ev *watcherRead,cms_net_ev *watcherWrite)

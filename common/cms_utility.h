@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_UTILITY_H__
 #include <string>
 #include <vector>
+#include <map>
 #include <common/cms_type.h>
 
 #define CMS_OK 0
@@ -87,4 +88,7 @@ std::string trim(std::string &s,std::string &delim);
 HASH makeHash(const char *bytes,int len);
 std::string parseSpeed8Mem(int64 speed,bool isSpeed);
 bool nonblocking(int fd);
+
+void printTakeTime(std::map<unsigned long,unsigned long> &mapSendTakeTime,unsigned long ttB,unsigned long ttE,char *str,bool bPrint);
+
 #endif

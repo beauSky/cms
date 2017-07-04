@@ -1293,10 +1293,18 @@ int CRtmpProtocol::decodeAmf03(RtmpMessage *msg,bool isAmf3)
 	}
 	else if (block->cmd == Amf0CommandError)
 	{
-		logs->error("*** %s [CRtmpProtocol::decodeAmf03] rtmp %s recv _error command ***",
-			mremoteAddr.c_str(),getRtmpType().c_str());
-		mrtmpStatus = RtmpStatusError;
-		ret = CMS_ERROR;
+		string codeValue,descValue;
+		amf0Block5Value(block, "code",codeValue);
+		amf0Block5Value(block, "description",descValue);
+		logs->warn("### %s [CRtmpProtocol::decodeAmf03] rtmp %s decodeAmf0 recv[ _error ],code %s ,description %s ###",
+			mremoteAddr.c_str(),getRtmpType().c_str(),codeValue.c_str(),descValue.c_str());
+		if (codeValue != StatusCodeCallFail) 
+		{
+			logs->error("*** %s [CRtmpProtocol::decodeAmf03] rtmp %s recv _error command ***",
+				mremoteAddr.c_str(),getRtmpType().c_str());
+			mrtmpStatus = RtmpStatusError;
+			ret = CMS_ERROR;
+		}
 	}
 	else if (block->cmd == Amf0CommandConnect)
 	{

@@ -48,11 +48,10 @@ TCPConn::TCPConn(int fd)
 	socklen_t len = sizeof(from);
 	if(getpeername(fd, (struct sockaddr *)&from, &len) != -1)
 	{
-		char szIP[16] = {0};
-		ipInt2ipStr(from.sin_addr.s_addr,szIP);
-		char tmp[23] = {0};
-		snprintf(tmp,sizeof(tmp),"%s:%d",szIP,ntohs(from.sin_port));
-		mraddr = tmp;
+		char szAddr[25] = {0};
+		ipInt2ipStr(from.sin_addr.s_addr,szAddr);
+		snprintf(szAddr+strlen(szAddr),sizeof(szAddr)-strlen(szAddr),":%d",ntohs(from.sin_port));
+		mraddr = szAddr;
 	}
 	else
 	{
@@ -66,6 +65,7 @@ TCPConn::TCPConn(int fd)
 	{
 		char szAddr[25] = {0};
 		ipInt2ipStr(saddr.sin_addr.s_addr,szAddr);
+		snprintf(szAddr+strlen(szAddr),sizeof(szAddr)-strlen(szAddr),":%d",ntohs(saddr.sin_port));
 		mladdr = szAddr;
 		logs->info("##### TCPConn accept local addr %s fd=%d #####",mladdr.c_str(),mfd);
 	}
@@ -154,6 +154,7 @@ int	  TCPConn::connect()
 		{
 			char szAddr[25] = {0};
 			ipInt2ipStr(saddr.sin_addr.s_addr,szAddr);
+			snprintf(szAddr+strlen(szAddr),sizeof(szAddr)-strlen(szAddr),":%d",ntohs(saddr.sin_port));
 			mladdr = szAddr;
 			logs->info("##### TCPConn connect local addr %s fd=%d #####",mraddr.c_str(),mfd);
 		}

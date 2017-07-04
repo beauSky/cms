@@ -203,7 +203,7 @@ int CConnRtmp::stop(std::string reason)
 
 	if (misCreateHls)
 	{
-		CMissionMgr::instance()->destroy(mHash);
+		CMissionMgr::instance()->destroy(mHashIdx,mHash);
 	}
 
 	return CMS_OK;

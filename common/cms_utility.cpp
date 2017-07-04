@@ -660,3 +660,191 @@ bool nonblocking(int fd)
 	}
 	return true;
 }
+
+void printTakeTime(std::map<unsigned long,unsigned long> &mapSendTakeTime,unsigned long ttB,unsigned long ttE,char *str,bool bPrint)
+{
+	unsigned int tt = ttE - ttB;
+	if (tt <= 1)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(1);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(1,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt == 2)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(2);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(2,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt == 3)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(3);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(3,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt == 4)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(4);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(4,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt == 5)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(5);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(5,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt > 5 && tt <= 10)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(10);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(10,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt > 10 && tt <= 20)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(20);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(20,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt > 20 && tt <= 30)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(30);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(30,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt > 30 && tt <= 50)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(50);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(50,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt > 50 && tt <= 100)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(100);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(100,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	else if (tt > 100)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.find(0);
+		if (it == mapSendTakeTime.end())
+		{
+			mapSendTakeTime.insert(make_pair(0,1));
+		}
+		else
+		{
+			it->second++;
+		}
+	}
+	if (bPrint)
+	{
+		std::map<unsigned long,unsigned long>::iterator it = mapSendTakeTime.begin();
+		for ( ; it != mapSendTakeTime.end(); ++it)
+		{
+			if (it->first == 1)
+			{
+				logs->debug("*** %s <0-1> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 2)
+			{
+				logs->debug("*** %s <2> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 3)
+			{
+				logs->debug("*** %s <3> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 4)
+			{
+				logs->debug("*** %s <4> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 5)
+			{
+				logs->debug("*** %s <5> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 10)
+			{
+				logs->debug("*** %s <5-10> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 20)
+			{
+				logs->debug("*** %s <10-20> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 30)
+			{
+				logs->debug("*** %s <20-30> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 50)
+			{
+				logs->debug("*** %s <30-50> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 100)
+			{
+				logs->debug("*** %s <50-100> take times %lu ***\n",str,it->second);
+			}
+			else if (it->first == 0)
+			{
+				logs->debug("*** %s <100-.> take times %lu ***\n",str,it->second);
+			}
+		}
+	}
+}

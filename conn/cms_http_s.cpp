@@ -572,11 +572,11 @@ int  CHttpServer::handleM3U8(int &ret)
 		makeHash(url);
 		std::string outData;
 		int64 outTT;
-		int ret = CMissionMgr::instance()->readM3U8(mHash,murl,mlocalIP,outData,outTT);
+		int ret = CMissionMgr::instance()->readM3U8(mHashIdx,mHash,murl,mlocalAddr,outData,outTT);
 		if (ret > 0)
 		{
-			logs->debug(">>> %s [CHttpServer::handleM3U8] %s m3u8\n %s ",
-				mremoteAddr.c_str(),murl.c_str(),outData.c_str());
+			logs->debug(">>> %s [CHttpServer::handleM3U8] %s ,local addr %s,m3u8\n %s ",
+				mremoteAddr.c_str(),murl.c_str(),mlocalAddr.c_str(),outData.c_str());
 
 			char szLength[20] = {0};
 			snprintf(szLength,sizeof(szLength),"%lu",outData.length());
@@ -673,7 +673,7 @@ int  CHttpServer::handleTS(int &ret)
 		makeHash(url);
 		int64 outTT;
 		SSlice *ss;
-		int ret = CMissionMgr::instance()->readTS(mHash,murl,mlocalIP,&ss,outTT);
+		int ret = CMissionMgr::instance()->readTS(mHashIdx,mHash,murl,mlocalAddr,&ss,outTT);
 		if (ret > 0)
 		{
 			char szLength[20] = {0};
@@ -694,16 +694,45 @@ int  CHttpServer::handleTS(int &ret)
 				ret = CMS_ERROR;
 				return CMS_ERROR;
 			}
-			ret = sendBefore(ss->mslice,ss->msliceLen);
-			if (ret < 0)
+
+			bool isError = false;
+			TsChunkArray *tca = NULL;
+			std::vector<TsChunkArray *>::iterator it = ss->marray.begin();
+			for (; it != ss->marray.end() && !isError; it++)
 			{
-				logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
-					mremoteAddr.c_str(),murl.c_str());
-				ret = CMS_ERROR;
-				return CMS_ERROR;
+				tca = *it;
+				int iBegin = beginChunk(tca);
+				int iEnd = endChunk(tca);
+				if (iBegin != -1 && iEnd != -1)
+				{
+					for (; iBegin < iEnd; iBegin++)
+					{
+						TsChunk *tc = NULL;
+						getChunk(tca,iBegin,&tc);
+						if (tc)
+						{
+							assert(tc->muse%TS_CHUNK_SIZE==0);
+							ret = sendBefore(tc->mdata,tc->muse);			
+							if (ret < 0)
+							{
+								isError = true;
+								logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
+									mremoteAddr.c_str(),murl.c_str());
+								ret = CMS_ERROR;
+							}
+						}
+						else
+						{
+							assert(0);
+						}
+					}
+				}
 			}
 			atomicDec(ss);
-			ret = CMS_OK;
+			if (!isError)
+			{
+				ret = CMS_OK;
+			}
 		}else
 		{
 			char szLength[20] = {0};
