@@ -2,7 +2,7 @@
 CXXFLAGS = -g -O2 -Wall -D_REENTRANT -D_POSIX_C_SOURCE=200112L -D_FILE_OFFSET_BITS=64
 
 LINK = $(CXX)
-LIBS = -L./lib/ ./lib/libssl.a ./lib/libcrypto.a ./lib/libev.a -lpthread -ldl -lrt -ls2n
+LIBS = -L./lib/ ./lib/libssl.a ./lib/libcrypto.a -lpthread -ldl -lrt -ls2n
 
 CMS_EXE = ./objs/cms
 
@@ -11,7 +11,9 @@ CMS_INC = -I./
 DIR_OBJS = objs
 CMS_DIR = ./$(DIR_OBJS)/
 
+DIR_TS = ts
 DIR_JSON = json
+DIR_STATIC=static
 DIR_STRATEGY=strategy
 DIR_TASK_MGR=taskmgr
 DIR_FLV_POOL=flvPool
@@ -32,6 +34,22 @@ DIR_APP=app
 #------------------------------- ALL -------------------------------
 all:mkcmsdir exe
 
+#---- ts ----
+CMS_DIR_TS_OBJS 	=  	$(CMS_DIR)$(DIR_TS)/cms_ts.o \
+							$(CMS_DIR)$(DIR_TS)/cms_hls_mgr.o \
+							$(CMS_DIR)$(DIR_TS)/cms_ts_chunk.o
+							
+# objs
+$(CMS_DIR)$(DIR_TS)/cms_ts.o: ./$(DIR_TS)/cms_ts.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_TS)/cms_ts.o ./$(DIR_TS)/cms_ts.cpp
+$(CMS_DIR)$(DIR_TS)/cms_hls_mgr.o: ./$(DIR_TS)/cms_hls_mgr.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_TS)/cms_hls_mgr.o ./$(DIR_TS)/cms_hls_mgr.cpp
+$(CMS_DIR)$(DIR_TS)/cms_ts_chunk.o: ./$(DIR_TS)/cms_ts_chunk.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_TS)/cms_ts_chunk.o ./$(DIR_TS)/cms_ts_chunk.cpp
+
 #---- json ----
 CMS_DIR_JSON_OBJS 	=  	$(CMS_DIR)$(DIR_JSON)/json_reader.o \
 														$(CMS_DIR)$(DIR_JSON)/json_value.o \
@@ -46,15 +64,39 @@ $(CMS_DIR)$(DIR_JSON)/json_value.o: ./$(DIR_JSON)/json_value.cpp
 $(CMS_DIR)$(DIR_JSON)/json_writer.o: ./$(DIR_JSON)/json_writer.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
 			$(CMS_DIR)$(DIR_JSON)/json_writer.o ./$(DIR_JSON)/json_writer.cpp
+
+#---- static ----
+CMS_DIR_STATIC_OBJS 	=  	$(CMS_DIR)$(DIR_STATIC)/cms_static.o \
+							$(CMS_DIR)$(DIR_STATIC)/cms_static_common.o 
+# objs
+$(CMS_DIR)$(DIR_STATIC)/cms_static.o: ./$(DIR_STATIC)/cms_static.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_STATIC)/cms_static.o ./$(DIR_STATIC)/cms_static.cpp
+$(CMS_DIR)$(DIR_STATIC)/cms_static_common.o: ./$(DIR_STATIC)/cms_static_common.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_STATIC)/cms_static_common.o ./$(DIR_STATIC)/cms_static_common.cpp
+
 			
 #---- strategy ----
-CMS_DIR_STRATEGY_OBJS 	=  	$(CMS_DIR)$(DIR_STRATEGY)/cms_fast_bit_rate.o 
+CMS_DIR_STRATEGY_OBJS 	=  	$(CMS_DIR)$(DIR_STRATEGY)/cms_fast_bit_rate.o \
+								$(CMS_DIR)$(DIR_STRATEGY)/cms_jitter.o \
+								$(CMS_DIR)$(DIR_STRATEGY)/cms_duration_timestamp.o \
+								$(CMS_DIR)$(DIR_STRATEGY)/cms_first_play.o
 # objs
 $(CMS_DIR)$(DIR_STRATEGY)/cms_fast_bit_rate.o: ./$(DIR_STRATEGY)/cms_fast_bit_rate.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
 			$(CMS_DIR)$(DIR_STRATEGY)/cms_fast_bit_rate.o ./$(DIR_STRATEGY)/cms_fast_bit_rate.cpp
+$(CMS_DIR)$(DIR_STRATEGY)/cms_jitter.o: ./$(DIR_STRATEGY)/cms_jitter.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_STRATEGY)/cms_jitter.o ./$(DIR_STRATEGY)/cms_jitter.cpp
+$(CMS_DIR)$(DIR_STRATEGY)/cms_duration_timestamp.o: ./$(DIR_STRATEGY)/cms_duration_timestamp.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_STRATEGY)/cms_duration_timestamp.o ./$(DIR_STRATEGY)/cms_duration_timestamp.cpp
+$(CMS_DIR)$(DIR_STRATEGY)/cms_first_play.o: ./$(DIR_STRATEGY)/cms_first_play.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_STRATEGY)/cms_first_play.o ./$(DIR_STRATEGY)/cms_first_play.cpp
 
-
+			
 #---- task mgr ----
 CMS_DIR_TASK_MGR_OBJS 	=  	$(CMS_DIR)$(DIR_TASK_MGR)/cms_task_mgr.o 
 # objs
@@ -76,7 +118,8 @@ CMS_DIR_PROTOCOL_OBJS 	=  	$(CMS_DIR)$(DIR_PROTOCOL)/cms_rtmp_handshake.o \
 														$(CMS_DIR)$(DIR_PROTOCOL)/cms_amf0.o \
 														$(CMS_DIR)$(DIR_PROTOCOL)/cms_flv_transmission.o \
 														$(CMS_DIR)$(DIR_PROTOCOL)/cms_http.o \
-														$(CMS_DIR)$(DIR_PROTOCOL)/cms_ssl.o
+														$(CMS_DIR)$(DIR_PROTOCOL)/cms_ssl.o \
+														$(CMS_DIR)$(DIR_PROTOCOL)/cms_flv_pump.o
 # objs
 $(CMS_DIR)$(DIR_PROTOCOL)/cms_rtmp_handshake.o: ./$(DIR_PROTOCOL)/cms_rtmp_handshake.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
@@ -99,13 +142,29 @@ $(CMS_DIR)$(DIR_PROTOCOL)/cms_http.o: ./$(DIR_PROTOCOL)/cms_http.cpp
 $(CMS_DIR)$(DIR_PROTOCOL)/cms_ssl.o: ./$(DIR_PROTOCOL)/cms_ssl.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
 			$(CMS_DIR)$(DIR_PROTOCOL)/cms_ssl.o ./$(DIR_PROTOCOL)/cms_ssl.cpp
+$(CMS_DIR)$(DIR_PROTOCOL)/cms_flv_pump.o: ./$(DIR_PROTOCOL)/cms_flv_pump.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_PROTOCOL)/cms_flv_pump.o ./$(DIR_PROTOCOL)/cms_flv_pump.cpp
+			
 #---- net ----
-CMS_DIR_NET_OBJS 	=  	$(CMS_DIR)$(DIR_NET)/cms_tcp_conn.o
+CMS_DIR_NET_OBJS 	=  	$(CMS_DIR)$(DIR_NET)/cms_tcp_conn.o \
+									$(CMS_DIR)$(DIR_NET)/cms_net_mgr.o \
+									$(CMS_DIR)$(DIR_NET)/cms_net_thread.o \
+									$(CMS_DIR)$(DIR_NET)/cms_net_var.o 
 # objs
 $(CMS_DIR)$(DIR_NET)/cms_tcp_conn.o: ./$(DIR_NET)/cms_tcp_conn.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
 			$(CMS_DIR)$(DIR_NET)/cms_tcp_conn.o ./$(DIR_NET)/cms_tcp_conn.cpp
-
+$(CMS_DIR)$(DIR_NET)/cms_net_mgr.o: ./$(DIR_NET)/cms_net_mgr.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_NET)/cms_net_mgr.o ./$(DIR_NET)/cms_net_mgr.cpp
+$(CMS_DIR)$(DIR_NET)/cms_net_thread.o: ./$(DIR_NET)/cms_net_thread.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_NET)/cms_net_thread.o ./$(DIR_NET)/cms_net_thread.cpp			
+$(CMS_DIR)$(DIR_NET)/cms_net_var.o: ./$(DIR_NET)/cms_net_var.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_NET)/cms_net_var.o ./$(DIR_NET)/cms_net_var.cpp
+			
 #---- log ----			
 CMS_DIR_LOG_OBJS 	=  	$(CMS_DIR)$(DIR_LOG)/cms_log.o
 # objs
@@ -119,6 +178,7 @@ CMS_DIR_INTERFACE_OBJS 	=  	$(CMS_DIR)$(DIR_INTERFACE)/cms_thread.o \
 														$(CMS_DIR)$(DIR_INTERFACE)/cms_interf_conn.o \
 														$(CMS_DIR)$(DIR_INTERFACE)/cms_read_write.o \
 														$(CMS_DIR)$(DIR_INTERFACE)/cms_protocol.o \
+														$(CMS_DIR)$(DIR_INTERFACE)/cms_stream_info.o 
 # objs
 $(CMS_DIR)$(DIR_INTERFACE)/cms_thread.o: ./$(DIR_INTERFACE)/cms_thread.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
@@ -135,6 +195,9 @@ $(CMS_DIR)$(DIR_INTERFACE)/cms_read_write.o: ./$(DIR_INTERFACE)/cms_read_write.c
 $(CMS_DIR)$(DIR_INTERFACE)/cms_protocol.o: ./$(DIR_INTERFACE)/cms_protocol.cpp
 	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
 			$(CMS_DIR)$(DIR_INTERFACE)/cms_protocol.o ./$(DIR_INTERFACE)/cms_protocol.cpp
+$(CMS_DIR)$(DIR_INTERFACE)/cms_stream_info.o: ./$(DIR_INTERFACE)/cms_stream_info.cpp
+	$(CXX) -c $(CXXFLAGS) $(CMS_INC) -o \
+			$(CMS_DIR)$(DIR_INTERFACE)/cms_stream_info.o ./$(DIR_INTERFACE)/cms_stream_info.cpp
 			
 #----- ev -----
 CMS_DIR_EV_OBJS 	=  	$(CMS_DIR)$(DIR_EV)/cms_ev.o
@@ -268,7 +331,9 @@ $(CMS_DIR)$(DIR_APP)/cms_app.o: ./$(DIR_APP)/cms_app.cpp
 			$(CMS_DIR)$(DIR_APP)/cms_app.o ./$(DIR_APP)/cms_app.cpp
 			
 #------------------------------- LINK -------------------------------
-CMS_OBJS =	$(CMS_DIR_STRATEGY_OBJS) \
+CMS_OBJS =	$(CMS_DIR_TS_OBJS) \
+				$(CMS_DIR_STATIC_OBJS) \
+				$(CMS_DIR_STRATEGY_OBJS) \
 				$(CMS_DIR_TASK_MGR_OBJS) \
 				$(CMS_DIR_FLV_POOL_OBJS) \
 				$(CMS_DIR_JSON_OBJS) \
@@ -295,6 +360,8 @@ exe: $(CMS_OBJS)
 #------------------------------- MKDIR -------------------------------
 mkcmsdir:
 	@test -d './$(DIR_OBJS)' || mkdir -p ./$(DIR_OBJS)
+	@test -d './$(DIR_OBJS)/$(DIR_TS)' || mkdir -p ./$(DIR_OBJS)/$(DIR_TS)
+	@test -d './$(DIR_OBJS)/$(DIR_STATIC)' || mkdir -p ./$(DIR_OBJS)/$(DIR_STATIC)
 	@test -d './$(DIR_OBJS)/$(DIR_STRATEGY)' || mkdir -p ./$(DIR_OBJS)/$(DIR_STRATEGY)
 	@test -d './$(DIR_OBJS)/$(DIR_TASK_MGR)' || mkdir -p ./$(DIR_OBJS)/$(DIR_TASK_MGR)
 	@test -d './$(DIR_OBJS)/$(DIR_FLV_POOL)' || mkdir -p ./$(DIR_OBJS)/$(DIR_FLV_POOL)
