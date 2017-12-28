@@ -25,6 +25,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 #include <log/cms_log.h>
+#include <vector>
+#include <string>
 
 class CAddr
 {
@@ -76,6 +78,37 @@ private:
 	char *mdhparam;
 };
 
+class CUpperAddr
+{
+public:
+	CUpperAddr();
+	~CUpperAddr();
+
+	void		addPull(std::string addr);
+	std::string getPull(unsigned int i);
+	void		addPush(std::string addr);
+	std::string getPush(unsigned int i);	
+private:
+	std::vector<std::string> mvPullAddr;
+	std::vector<std::string> mvPushAddr;
+	
+};
+
+class CUdpFlag
+{
+public:
+	CUdpFlag();
+	~CUdpFlag();
+	bool		isOpenUdpPull();
+	bool		isOpenUdpPush();
+	void		setUdp(bool isPull,bool isPush);
+	int			udpConnNum();
+private:
+	bool	    misOpenUdpPull;
+	bool	    misOpenUdpPush;
+	int			miUdpMaxConnNum;
+};
+
 class CConfig
 {
 public:
@@ -83,23 +116,25 @@ public:
 	~CConfig();
 	static CConfig *instance();
 	static void freeInstance();
-	bool	init(const char *configPath);
-	CAddr   *addrHttp();
-	CAddr	*addrHttps();
-	CAddr	*addrRtmp();
-	CAddr	*addrQuery();
-	CertKey *certKey();
-	Clog	*clog();
+	bool		init(const char *configPath);
+	CAddr		*addrHttp();
+	CAddr		*addrHttps();
+	CAddr		*addrRtmp();
+	CAddr		*addrQuery();
+	CertKey		*certKey();
+	Clog		*clog();
+	CUpperAddr	*upperAddr();
+	CUdpFlag	*udpFlag();
 private:
 	static CConfig *minstance;
 
-	CAddr	*mHttp;
-	CAddr	*mHttps;
-	CAddr	*mRtmp;
-	CAddr	*mQuery;
-
-	Clog	*mlog;
-
-	CertKey *mcertKey;
+	CAddr	   *mHttp;
+	CAddr	   *mHttps;
+	CAddr	   *mRtmp;
+	CAddr	   *mQuery;
+	CUpperAddr *muaAddr;
+	Clog	   *mlog;
+	CertKey    *mcertKey;
+	CUdpFlag   *mUdpFlag;
 };
 #endif

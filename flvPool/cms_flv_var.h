@@ -31,6 +31,8 @@ enum FlvPoolDataType
 #define FLV_TAG_VIDEO		0x09
 #define FLV_TAG_SCRIPT		0x12
 
+#define OFFSET_FIRST_VIDEO_FRAME 0x05
+
 struct Slice 
 {
 	int				mionly;				//0 表示没被使用，大于0表示正在被使用次数
@@ -91,6 +93,8 @@ struct TTandKK
 
 struct StreamSlice 
 {
+	//id唯一性 用于发送数据时 判断任务是否重启
+	uint64						muid;
 	//两个临时变量
 	int64						maxRelativeDuration;
 	int64						minRelativeDuration;

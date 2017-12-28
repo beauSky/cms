@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <core/cms_lock.h>
 #include <core/cms_thread.h>
 #include <net/cms_tcp_conn.h>
+#include <net/cms_udp_conn.h>
 #include <common/cms_var.h>
 #include <map>
 #include <queue>
@@ -79,8 +80,8 @@ public:
 
 	void addOneConn(int fd,Conn *c);
 	void delOneConn(int fd);
-	Conn *createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
-		,ConnType connectType,RtmpType rtmpType);
+	Conn *createConn(HASH &hash,char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
+		,ConnType connectType,RtmpType rtmpType,bool isTcp = true);
 private:
 	static CConnMgrInterface *minstance;
 	CConnMgr *mconnMgrArray[NUM_OF_THE_CONN_MGR];

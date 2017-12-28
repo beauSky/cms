@@ -58,6 +58,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define cmsSleep(e) usleep(e*1000)
 #endif /* posix end */
 
+unsigned int hash2Idx(HASH &hash);
+std::string beforeHashUrl(std::string url);			//获取算hash字符串前预处理
+std::string beforeMajorHashUrl(std::string url);	//获取算hash字符串前预处理
 void getStrHash(char* input,int len,char* hash);
 void trueHash2FalseHash(unsigned char hash[20]);
 void falseHash2TrueHash(unsigned char hash[20]);
@@ -72,9 +75,11 @@ std::string getBase64Encode(std::string strUrl);
 unsigned long long ntohll(unsigned long long val);
 unsigned long long htonll(unsigned long long val);
 unsigned long getTickCount();
+unsigned long long getMilSeconds();
 int getTimeStr(char *dstBuf);
 void getDateTime(char* szDTime);
 long long getTimeUnix();
+long long getNsTime();
 int getTimeDay();
 int cmsMkdir(const char *dirname);
 bool isLegalIp(const char * const szIp);
@@ -88,7 +93,7 @@ std::string trim(std::string &s,std::string &delim);
 HASH makeHash(const char *bytes,int len);
 std::string parseSpeed8Mem(int64 speed,bool isSpeed);
 bool nonblocking(int fd);
-
 void printTakeTime(std::map<unsigned long,unsigned long> &mapSendTakeTime,unsigned long ttB,unsigned long ttE,char *str,bool bPrint);
+unsigned long long getVid();
 
 #endif

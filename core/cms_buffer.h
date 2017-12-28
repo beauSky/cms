@@ -57,6 +57,9 @@ private:
 	int32 mtotalReadBytes;
 	CReaderWriter *mrd;
 	struct s2n_connection	*ms2nConn;
+
+	//test
+	int mkcpReadLen;
 };
 
 class CBufferWriter

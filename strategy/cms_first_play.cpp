@@ -121,7 +121,7 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 		mdropSliceNum = (mvideoFrameRate+maudioFrameRate)*mfirstPlaySkipMilSecond/1000;		
 		int64 minIdx = CFlvPool::instance()->getMinIdx(mhashIdx,mhash);
 		int64 maxIdx = CFlvPool::instance()->getMaxIdx(mhashIdx,mhash);
-		logs->debug(">>>%s %s first play task %s should drop slice num %d,minIdx=%lld,maxIdx=%lld,s->mllIndex=%lld",
+		logs->debug(">>>1 %s %s first play task %s should drop slice num %d,minIdx=%lld,maxIdx=%lld,s->mllIndex=%lld",
 			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 			mdropSliceNum,minIdx,maxIdx,s->mllIndex);
 		if (s->mllIndex-minIdx > (int64)mdropSliceNum)
@@ -149,7 +149,7 @@ bool CFirstPlay::checkShouldDropFrameCount(int64 &transIdx,Slice *s)
 		int64 maxIdx = CFlvPool::instance()->getMaxIdx(mhashIdx,mhash);
 		mdropSliceNum = (mvideoFrameRate+maudioFrameRate)*mfirstPlaySkipMilSecond/1000;
 		mdropSliceNum -= 20;
-		logs->debug(">>>%s %s first play task %s should drop slice num %d,maxIdx=%lld,s->mllIndex=%lld",
+		logs->debug(">>>2 %s %s first play task %s should drop slice num %d,maxIdx=%lld,s->mllIndex=%lld",
 			mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 			mdropSliceNum,maxIdx,s->mllIndex);
 		if (mdropSliceNum > 0)
@@ -178,7 +178,7 @@ bool CFirstPlay::needDropFrame(Slice *s)
 			s->mData[0] != VideoTypeHEVCKey))) 
 		{
 			//如果关键帧距离gop小于丢帧长度，只有满足丢帧数大于丢帧长度，而且遇到关键帧才能结束
-			logs->debug(">>>%s %s first play task %s 11 should drop slice num %d,have drop %d",
+			logs->debug(">>>3 %s %s first play task %s 11 should drop slice num %d,have drop %d",
 				mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 				mdropSliceNum,mhaveDropSliceNum);
 			misSetFirstFrame = false;
@@ -189,17 +189,20 @@ bool CFirstPlay::needDropFrame(Slice *s)
 			if (mdistanceKeyFrame > mfirstPlaySkipMilSecond &&
 				(s->mData[0] == VideoTypeAVCKey || s->mData[0] == VideoTypeHEVCKey))
 			{
-				logs->debug(">>>%s %s first play task %s 22 should drop slice num %d,have drop %d",
+				logs->debug(">>>4 %s %s first play task %s 22 should drop slice num %d,have drop %d",
 					mremoteAddr.c_str(),modeName.c_str(),murl.c_str(),
 					mdropSliceNum,mhaveDropSliceNum);
 				misSetFirstFrame = false;
 			}
 			else
-			{
-				mhaveDropSliceNum++;
+			{				
 				needDrop = true;
 			}
 		}
+	}
+	if (misSetFirstFrame)
+	{
+		mhaveDropSliceNum++;
 	}
 	return needDrop;
 }

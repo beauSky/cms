@@ -37,6 +37,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct CreateTaskPacket 
 {
+	HASH				hash;
 	std::string			pullUrl;
 	std::string			pushUrl;
 	std::string			oriUrl;
@@ -74,7 +75,7 @@ public:
 	void    pushTaskStopAllByIP(std::string strIP);		//删除推流ip
 	bool	pushTaskIsExist(HASH &hash);
 	//异步创建任务
-	void	createTask(std::string pullUrl,std::string pushUrl,std::string oriUrl,
+	void	createTask(HASH &hash,std::string pullUrl,std::string pushUrl,std::string oriUrl,
 		std::string refer,int createAct,bool isHotPush,bool isPush2Cdn);
 	void	push(CreateTaskPacket *ctp);
 private:

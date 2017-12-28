@@ -541,11 +541,24 @@ int CRtmpProtocol::want2Read(bool isTimeout)
 {
 	if (isTimeout)
 	{
+		if (!isUdpAddrEmpty(mrw->udpAddr()))
+		{
+			if (mwrBuff->flush() == CMS_ERROR)//udp超时 发送ack确认
+			{
+				logs->error("%s [CRtmpProtocol::want2Read] rtmp %s flush fail,errno=%d,strerrno=%s ***",
+					mremoteAddr.c_str(), getRtmpType().c_str(), mwrBuff->errnos(), mwrBuff->errnoCode());
+				return CMS_ERROR;
+			}
+		}
+		
 		assert(mcmsReadTimeOutDo==1);
 		mcmsReadTimeOutDo--;
 		doReadTimeout();
 		//不能往下处理数据
-		return CMS_OK;
+		if (isUdpAddrEmpty(mrw->udpAddr()))//udp比较特殊，需要定时器
+		{
+			return CMS_OK;
+		}		
 	}
 	if (!mfinishShake)
 	{
@@ -598,7 +611,7 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 				return CMS_ERROR;
 			}
 		}
-	}
+	}	
 	int ret = mwrBuff->flush();
 	if (ret == CMS_ERROR)
 	{
@@ -617,7 +630,7 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 	{
 		if (!mwrBuff->isUsable())
 		{
-			//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
+			//如果CBufferWriter还有可观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
 			//logs->debug("%s [CRtmpProtocol::doRtmpConnect] rtmp %s too many data left",
 			//	mremoteAddr.c_str(),getRtmpType().c_str());
 			doWriteTimeout();
@@ -2732,7 +2745,7 @@ int CRtmpProtocol::decodePlay(amf0::Amf0Block *block)
 	{
 		return CMS_ERROR;
 	}
-	msuper->tryCreateTask();
+	msuper->tryCreatePullTask();
 	int ret = msuper->doTransmission();
 	if (ret < 0)
 	{

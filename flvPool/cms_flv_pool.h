@@ -64,7 +64,8 @@ public:
 	void push(uint32 i,Slice *s);
 	bool pop(uint32 i,Slice **s);
 	int  readRirstVideoAudioSlice(uint32 i,HASH &hash,Slice **s,bool isVideo);	
-	int  readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNum,bool isTrans = false );
+	int  readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNum,bool isTrans, int64 llMetaDataIdx, int64 llFirstVideoIdx, int64 llFirstAudioIdx,
+		bool &isExist, bool &isTaskRestart, bool isPublishTask, bool &isMetaDataChanged, bool &isFirstVideoAudioChanged, uint64 &transUid);
 	bool isHaveMetaData(uint32 i,HASH &hash);
 	bool isExist(uint32 i,HASH &hash);
 	bool isFirstVideoChange(uint32 i,HASH &hash,int64 &videoIdx);

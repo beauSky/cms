@@ -27,14 +27,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <dispatch/cms_net_dispatch.h>
 #include <core/cms_lock.h>
 #include <common/cms_utility.h>
-#include <core/cms_thread.h>
 #include <log/cms_log.h>
 #include <queue>
 #include <assert.h>
 using namespace std;
 
 #define TIME_OUT_MIL_SECOND	10
-#define TIME_IN_MIL_SECOND	1000
+#define TIME_IN_MIL_SECOND	10
 //Ð´³¬Ê±
 queue<cms_timer *> gqueueWT;
 CLock gqueueWL;
@@ -82,7 +81,7 @@ void *cms_timer_write_thread(void *param)
 	do 
 	{
 		is = false;
-		mils = 1;
+		mils = 10;
 		
 		gqueueWL.Lock();
 		if (!gqueueWT.empty())

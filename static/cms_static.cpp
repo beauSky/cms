@@ -117,7 +117,7 @@ void CStatic::thread()
 				handle(otu);
 				delete otu;
 				break;
-			case PACKET_ONE_TASK_MEDA:
+			case PACKET_ONE_TASK_MEDIA:
 				otma = (OneTaskMeida *)otp;
 				handle(otma);
 				delete otma;
@@ -304,6 +304,14 @@ void CStatic::handle(OneTaskMeida *otm)
 		{
 			it->second->mmediaRate = otm->mediaRate;
 		}
+		if (otm->width > 0)
+		{
+			it->second->miWidth = otm->width;
+		}
+		if (otm->height > 0)
+		{
+			it->second->miHeight = otm->height;
+		}
 		if (!otm->videoType.empty())
 		{
 			it->second->mvideoType = otm->videoType;
@@ -317,6 +325,7 @@ void CStatic::handle(OneTaskMeida *otm)
 			it->second->mremoteAddr = otm->remoteAddr;
 		}
 		it->second->murl = otm->url;
+		it->second->misUDP = otm->isUdp;
 	}
 	mlockHashTask.Unlock();
 }
@@ -334,49 +343,51 @@ void CStatic::handle(OneTaskMem *otm)
 
 std::string CStatic::dump()
 {
-	Json::Value root;
-	Json::FastWriter writer;
+	cJSON *root = cJSON_CreateObject();
 
-	Json::Value taskInfo(Json::arrayValue);
-	root["task_num"] = getTaskInfo(taskInfo);
-	root["task_list"] = taskInfo;
-	root["conn_num"] = mtotalConn;
-	root["upload_speed"] = (Json::Value::Int64)muploadSpeed;
-	root["download_speed"] = (Json::Value::Int64)mdownloadSpeed;
-	root["upload_speed_s"] = parseSpeed8Mem(muploadSpeed,true);
-	root["download_speed_s"] = parseSpeed8Mem(mdownloadSpeed,true);
+	cJSON *taskArray = NULL;
+	cJSON_AddItemToObject(root,"task_num",cJSON_CreateNumber(getTaskInfo(&taskArray)));
+	cJSON_AddItemToObject(root, "task_list",taskArray);
+	cJSON_AddItemToObject(root, "conn_num",cJSON_CreateNumber(mtotalConn));
+	cJSON_AddItemToObject(root, "upload_speed",cJSON_CreateNumber(muploadSpeed));
+	cJSON_AddItemToObject(root, "download_speed",cJSON_CreateNumber(mdownloadSpeed));
+	cJSON_AddItemToObject(root, "upload_speed_s",cJSON_CreateString(parseSpeed8Mem(muploadSpeed,true).c_str()));
+	cJSON_AddItemToObject(root, "download_speed_s",cJSON_CreateString(parseSpeed8Mem(mdownloadSpeed,true).c_str()));
 
 	int cpu = getCpuUsage();
-	root["cpu"] = cpu;
+	cJSON_AddItemToObject(root, "cpu",cJSON_CreateNumber(cpu));
 	float mem = getMemUsage();
-	root["mem"] = mem;
+	cJSON_AddItemToObject(root, "mem",cJSON_CreateNumber(mem));
 	int   memsize = getMemSize();
-	root["mem_size"] = memsize;
+	cJSON_AddItemToObject(root, "mem_size",cJSON_CreateNumber(memsize));
 	string strBuildTime = __DATE__;
 	strBuildTime.append(" ");
 	strBuildTime.append(__TIME__);
-	root["build_time"] = strBuildTime;	
+	cJSON_AddItemToObject(root, "build_time",cJSON_CreateString(strBuildTime.c_str()));
 
 	struct tm st;
 	localtime_r(&mappStartTime, &st);
 	char szStartTime[128] = {0};
 	snprintf(szStartTime,sizeof(szStartTime),"%04d-%02d-%02d %02d:%02d:%02d",
 		st.tm_year+1900,st.tm_mon+1, st.tm_mday, st.tm_hour, st.tm_min, st.tm_sec);
-	root["start_time"] = szStartTime;
+	cJSON_AddItemToObject(root, "start_time",cJSON_CreateString(szStartTime));
 
 	localtime_r(&mupdateTime, &st);
 	char szUpdateTime[128] = {0};
 	snprintf(szUpdateTime,sizeof(szUpdateTime),"%04d-%02d-%02d %02d:%02d:%02d",
 		st.tm_year+1900,st.tm_mon+1, st.tm_mday, st.tm_hour, st.tm_min, st.tm_sec);
-	root["update_data_time"] = szUpdateTime;
+	cJSON_AddItemToObject(root, "update_data_time",cJSON_CreateString(szUpdateTime));
 
-	string strJson = writer.write(root);
+	string strJson = cJSON_PrintUnformatted(root);
+
+	cJSON_Delete(root);
 
 	return strJson;
 }
 
-int CStatic::getTaskInfo(Json::Value &value)
+int CStatic::getTaskInfo(cJSON **value)
 {
+	*value = cJSON_CreateArray();
 	int size = 0;
 	mlockHashTask.Lock();
 	size = mmapHashTask.size();
@@ -384,40 +395,40 @@ int CStatic::getTaskInfo(Json::Value &value)
 	for ( ; it != mmapHashTask.end(); ++it)
 	{
 		OneTask *otk = it->second;
-		Json::Value v;
+		cJSON *v = cJSON_CreateObject();
 		HASH hash = it->first;
 		struct tm st;
 		localtime_r(&otk->mttCreate, &st);
 		char szTime[128] = {0};
 		snprintf(szTime,sizeof(szTime),"%04d-%02d-%02d %02d:%02d:%02d",
 			st.tm_year+1900,st.tm_mon+1, st.tm_mday, st.tm_hour, st.tm_min, st.tm_sec);
-		v["time"] = szTime;
+		cJSON_AddItemToObject(v,"time",cJSON_CreateString(szTime));
 
-		v["url"] = otk->murl;
-		v["addr"] = otk->mremoteAddr;
+		cJSON_AddItemToObject(v, "url",cJSON_CreateString(otk->murl.c_str()));
+		cJSON_AddItemToObject(v, "addr", cJSON_CreateString(otk->mremoteAddr.c_str()));
+		cJSON_AddItemToObject(v, "conn_num", cJSON_CreateNumber(otk->mtotalConn));
 
-		v["media_rate"] = otk->mmediaRate;
-		v["video_frame_rate"] = otk->mvideoFramerate;
-		v["video_type"] = otk->mvideoType;
-		v["audio_frame_rate"] = otk->maudioFramerate;
-		v["audio_type"] = otk->maudioType;
-		v["audio_sample_rate"] = otk->maudioSamplerate;
+		cJSON_AddItemToObject(v, "media_rate",cJSON_CreateNumber(otk->mmediaRate));
+		cJSON_AddItemToObject(v, "video_frame_rate", cJSON_CreateNumber(otk->mvideoFramerate));	
+		cJSON_AddItemToObject(v, "video_type", cJSON_CreateString(otk->mvideoType.c_str()));
+		cJSON_AddItemToObject(v, "video_width", cJSON_CreateNumber(otk->miWidth));
+		cJSON_AddItemToObject(v, "video_height", cJSON_CreateNumber(otk->miHeight));
 
-		v["conn_num"] = otk->mtotalConn;
-// 		float frameDropRate = getFrameDropRate(hash);
-// 		char szFrameDropRate[10];
-// 		snprintf(szFrameDropRate,sizeof(szFrameDropRate),"%0.2f",frameDropRate);
-// 		v["frame_drop_rate"] = szFrameDropRate;
+		cJSON_AddItemToObject(v, "audio_frame_rate", cJSON_CreateNumber(otk->maudioFramerate));
+		cJSON_AddItemToObject(v, "audio_sample_rate", cJSON_CreateNumber(otk->maudioSamplerate));		
+		cJSON_AddItemToObject(v, "audio_type", cJSON_CreateString(otk->maudioType.c_str()));
+		
+		cJSON_AddItemToObject(v, "udp", cJSON_CreateBool(otk->misUDP?1:0));
 
-		v["upload_speed"] = (Json::Value::Int64)otk->muploadSpeed;
-		v["download_speed"] =  (Json::Value::Int64)otk->mdownloadSpeed;
-		v["upload_speed_s"] = parseSpeed8Mem(otk->muploadSpeed,true);
-		v["download_speed_s"] = parseSpeed8Mem(otk->mdownloadSpeed,true);
+		cJSON_AddItemToObject(v, "download_speed", cJSON_CreateNumber(otk->mdownloadSpeed));
+		cJSON_AddItemToObject(v, "download_speed_s", cJSON_CreateString(parseSpeed8Mem(otk->mdownloadSpeed, true).c_str()));
+		cJSON_AddItemToObject(v, "upload_speed", cJSON_CreateNumber(otk->muploadSpeed));		
+		cJSON_AddItemToObject(v, "upload_speed_s", cJSON_CreateString(parseSpeed8Mem(otk->muploadSpeed, true).c_str()));		
 
-		v["total_mem"] =  (Json::Value::Int64)otk->mtotalMem;
-		v["total_mem_s"] =  parseSpeed8Mem(otk->mtotalMem,false);
+		cJSON_AddItemToObject(v, "total_mem", cJSON_CreateNumber(otk->mtotalMem));
+		cJSON_AddItemToObject(v, "total_mem_s", cJSON_CreateString(parseSpeed8Mem(otk->mtotalMem, false).c_str()));
 
-		value.append(v);
+		cJSON_AddItemToArray(*value, v);
 	}
 	mlockHashTask.Unlock();
 	return size;

@@ -22,24 +22,24 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#ifndef __CMS_ERRNO_H__
-#define __CMS_ERRNO_H__
+#ifndef __CMS_CONN_LISTENER_H__
+#define __CMS_CONN_LISTENER_H__
+#include <common/cms_type.h>
+#include <interface/cms_interf_conn.h>
 
-enum CmsErrnoCode
+class CConnListener 
 {
-	CMS_ERRNO_TIMEOUT = 10086100,
-	CMS_ERRNO_FIN,	
-	CMS_S2N_ERR_T_IO, /* Underlying I/O operation failed, check system errno */
-	CMS_S2N_ERR_T_CLOSED, /* EOF */
-	CMS_S2N_ERR_T_BLOCKED, /* Underlying I/O operation would block */
-	CMS_S2N_ERR_T_ALERT, /* Incoming Alert */
-	CMS_S2N_ERR_T_PROTO, /* Failure in some part of the TLS protocol. Ex: CBC verification failure */
-	CMS_S2N_ERR_T_INTERNAL, /* Error internal to s2n. A precondition could have failed. */
-	CMS_S2N_ERR_T_USAGE, /* User input error. Ex: Providing an invalid cipher preference version */
-	CMS_KCP_ERR_FAIL,/* User KCP protocol check fail */
-	CMS_ERROR_UNKNOW,
-	CMS_ERRNO_NONE,
+public:
+	CConnListener();
+	virtual ~CConnListener();
+	virtual int  listen(char* addr,ConnType listenType) = 0;
+	virtual int  accept() = 0;
+	virtual void stop() = 0;
+	virtual int  fd() = 0;	
+	virtual ConnType listenType() = 0;
+	virtual bool isTcp() = 0;
+	virtual void *oneConn() = 0;	//udp 使用的接口
+	virtual void oneConnRead(void *one,Conn *conn) = 0; //udp 使用的接口
 };
 
-char *cmsStrErrno(int code);
 #endif

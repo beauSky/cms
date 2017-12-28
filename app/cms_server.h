@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __APP_SERVER_H__
 #define __APP_SERVER_H__
 #include <net/cms_tcp_conn.h>
+#include <net/cms_udp_conn.h>
 
 class CServer
 {
@@ -40,6 +41,7 @@ private:
 	TCPListener	*mHttp;
 	TCPListener *mHttps;
 	TCPListener	*mRtmp;
+	UDPListener *muRtmp;
 	TCPListener	*mQuery;
 };
 #endif

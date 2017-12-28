@@ -36,7 +36,7 @@ class CRtmpProtocol;
 class CFlvTransmission
 {
 public:
-	CFlvTransmission(CProtocol *protocol);
+	CFlvTransmission(CProtocol *protocol,bool isPushTask = false);
 	~CFlvTransmission();
 	void setHash(uint32 hashIdx,HASH &hash);
 	void setWaterMarkHash(uint32 hashIdx,HASH &hash);
@@ -62,11 +62,15 @@ private:
 	int64			mllFirstVideoIdx;
 	int64			mllFirstAudioIdx;
 	int64			mllTransIdx;
+	uint64			mullTransUid;
 	bool			misChangeFirstVideo;
 	int				mchangeFristVideoTimes;
+	bool			misTaskRestart;
 
 	int64			mcacheTT; //ª∫¥Ê ±º‰ ms
 	uint32			muiKeyFrameDistance;
 	int32			msliceFrameRate;
+
+	bool			misPushTask;
 };
 #endif

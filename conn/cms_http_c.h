@@ -39,7 +39,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 class ChttpClient:public Conn,public CStreamInfo
 {
 public:
-	ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUrl,
+	ChttpClient(HASH &hash,CReaderWriter *rw,std::string pullUrl,std::string oriUrl,
 		std::string refer,bool isTls);
 	~ChttpClient();
 	//conn 接口
@@ -49,9 +49,11 @@ public:
 	std::string getUrl();
 	std::string getPushUrl();
 	std::string getRemoteIP();
-	cms_net_ev    *evReadIO();
-	cms_net_ev    *evWriteIO();
+	cms_net_ev    *evReadIO(cms_net_ev *ev = NULL);
+	cms_net_ev    *evWriteIO(cms_net_ev *ev = NULL);
 	void down8upBytes();
+
+	CReaderWriter *rwConn();
 
 	//stream info 接口
 	int		firstPlaySkipMilSecond();

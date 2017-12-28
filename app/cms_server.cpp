@@ -34,6 +34,7 @@ CServer::CServer()
 	mHttp = new TCPListener();
 	mHttps = new TCPListener();
 	mRtmp = new TCPListener();
+	muRtmp = new UDPListener();
 	mQuery = new TCPListener();
 }
 
@@ -42,6 +43,7 @@ CServer::~CServer()
 	delete mHttp;
 	delete mHttps;
 	delete mRtmp;
+	delete muRtmp;
 	delete mQuery;
 }
 
@@ -63,8 +65,9 @@ void CServer::freeInstance()
 	}
 }
 
-bool	CServer::listenAll()
+bool CServer::listenAll()
 {
+	initUdpSocket();
 	if (mHttp->listen(CConfig::instance()->addrHttp()->addr(),TypeHttp) == CMS_ERROR)
 	{
 		logs->error("***** [CServer::listenAll] listen http fail *****");
@@ -78,7 +81,12 @@ bool	CServer::listenAll()
 	}
 	if (mRtmp->listen(CConfig::instance()->addrRtmp()->addr(),TypeRtmp) == CMS_ERROR)
 	{
-		logs->error("***** [CServer::listenAll] listen rtmp fail *****");
+		logs->error("***** [CServer::listenAll] listen tcp rtmp fail *****");
+		return false;
+	}
+	if (muRtmp->listen(CConfig::instance()->addrRtmp()->addr(),TypeRtmp) == CMS_ERROR)
+	{
+		logs->error("***** [CServer::listenAll] listen udp rtmp fail *****");
 		return false;
 	}
 	if (mQuery->listen(CConfig::instance()->addrQuery()->addr(),TypeQuery) == CMS_ERROR)
@@ -86,6 +94,16 @@ bool	CServer::listenAll()
 		logs->error("***** [CServer::listenAll] listen query fail *****");
 		return false;
 	}
+	//udp 比较特殊
+	if (!muRtmp->run())
+	{
+		logs->error("***** [CServer::listenAll] run udp rtmp fail *****");
+		return false;
+	}
+	//udp监控数据可读 监听sock是否可读还是走正常的网络监听
+	cms_net_ev *sockIO = CNetDispatch::instance()->addOneListenDispatch(muRtmp->fd(),muRtmp);
+	muRtmp->setIO8CallBack(sockIO,acceptEV);
+	//udp 比较特殊 结束
 	CNetDispatch::instance()->addOneListenDispatch(mHttp->fd(),mHttp);
 	if (CConfig::instance()->certKey()->isOpenSSL())
 	{

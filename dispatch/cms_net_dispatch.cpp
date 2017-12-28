@@ -38,7 +38,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define MaxDispatchNum 1000
 #define VDSPtr vector<CDispatch*>*
-#define MapTcpListenIter map<int,TCPListener *>::iterator
+#define MapTcpListenIter map<int,CConnListener *>::iterator
 
 CNetDispatch *CNetDispatch::minstance = NULL;
 CNetDispatch::CNetDispatch()
@@ -71,99 +71,206 @@ void CNetDispatch::freeInstance()
 
 void CNetDispatch::addOneDispatch(int fd, CDispatch *ds)
 {	
-	VDSPtr ptr = NULL;
-	mdispatchLock.WLock();
-	int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
-	if (mfdDispatch.size() > (unsigned int)i)
+	if (fd < 0)
 	{
-		ptr = mfdDispatch.at(i);
+		logs->debug(">>>>addOneDispatch sock %d read event.",fd);
+		int nfd = ~(fd - 1); //转为正数
+		VDSPtr ptr = NULL;
+		mnegDispatchLock.WLock();
+		int i = nfd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		if (mfdNegDispatch.size() > (unsigned int)i)
+		{
+			ptr = mfdNegDispatch.at(i);
+		}
+		else
+		{		
+			for (unsigned int n = mfdNegDispatch.size(); n < (unsigned int)i; n++)
+			{			
+				mfdNegDispatch.push_back(NULL);
+			}
+			ptr = new vector<CDispatch*>;
+			mfdNegDispatch.push_back(ptr);
+		}
+		if (ptr == NULL)
+		{
+			//以前没有开辟过空间
+			ptr = new vector<CDispatch*>;
+			mfdNegDispatch[i] = ptr;
+		}
+		i = nfd % MaxDispatchNum; //选中队列中的位置
+		for (unsigned int n = ptr->size(); n < (unsigned int)(i+1); n++)  //必须预分配位置
+		{
+			ptr->push_back(NULL);
+		}
+		assert(ptr->at(i) == NULL);
+		(*ptr)[i] = ds;
+		mnegDispatchLock.UnWLock();
 	}
 	else
-	{		
-		for (unsigned int n = mfdDispatch.size(); n < (unsigned int)i; n++)
-		{			
-			mfdDispatch.push_back(NULL);
+	{
+		VDSPtr ptr = NULL;
+		mdispatchLock.WLock();
+		int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		if (mfdDispatch.size() > (unsigned int)i)
+		{
+			ptr = mfdDispatch.at(i);
 		}
-		ptr = new vector<CDispatch*>;
-		mfdDispatch.push_back(ptr);
+		else
+		{		
+			for (unsigned int n = mfdDispatch.size(); n < (unsigned int)i; n++)
+			{			
+				mfdDispatch.push_back(NULL);
+			}
+			ptr = new vector<CDispatch*>;
+			mfdDispatch.push_back(ptr);
+		}
+		if (ptr == NULL)
+		{
+			//以前没有开辟过空间
+			ptr = new vector<CDispatch*>;
+			mfdDispatch[i] = ptr;
+		}
+		i = fd % MaxDispatchNum; //选中队列中的位置
+		for (unsigned int n = ptr->size(); n < (unsigned int)(i+1); n++)  //必须预分配位置
+		{
+			ptr->push_back(NULL);
+		}
+		assert(ptr->at(i) == NULL);
+		(*ptr)[i] = ds;
+		mdispatchLock.UnWLock();
 	}
-	if (ptr == NULL)
-	{
-		//以前没有开辟过空间
-		ptr = new vector<CDispatch*>;
-		mfdDispatch[i] = ptr;
-	}
-	i = fd % MaxDispatchNum; //选中队列中的位置
-	for (unsigned int n = ptr->size(); n < (unsigned int)(i+1); n++)  //必须预分配位置
-	{
-		ptr->push_back(NULL);
-	}
-	assert(ptr->at(i) == NULL);
-	(*ptr)[i] = ds;
-	mdispatchLock.UnWLock();
 }
 
 void CNetDispatch::delOneDispatch(int fd)
 {
-	VDSPtr ptr = NULL;
-	mdispatchLock.WLock();
-	int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
-	if (mfdDispatch.size() > (unsigned int)i)
+	if (fd < 0)
 	{
-		ptr = mfdDispatch.at(i);
-		i = fd % MaxDispatchNum; //选中队列中的位置
-		if ((ptr->size() > (unsigned int)i))
+		int nfd = ~(fd - 1); //转为正数
+		VDSPtr ptr = NULL;
+		mnegDispatchLock.WLock();
+		int i = nfd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		if (mfdNegDispatch.size() > (unsigned int)i)
 		{
-			//assert(ptr->at(i) != NULL);
-			(*ptr)[i] = NULL;
-		}
-	}	
-	mdispatchLock.UnWLock();
+			ptr = mfdNegDispatch.at(i);
+			i = nfd % MaxDispatchNum; //选中队列中的位置
+			if ((ptr->size() > (unsigned int)i))
+			{
+				//assert(ptr->at(i) != NULL);
+				(*ptr)[i] = NULL;
+			}
+		}	
+		mnegDispatchLock.UnWLock();
+	}
+	else
+	{
+		VDSPtr ptr = NULL;
+		mdispatchLock.WLock();
+		int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		if (mfdDispatch.size() > (unsigned int)i)
+		{
+			ptr = mfdDispatch.at(i);
+			i = fd % MaxDispatchNum; //选中队列中的位置
+			if ((ptr->size() > (unsigned int)i))
+			{
+				//assert(ptr->at(i) != NULL);
+				(*ptr)[i] = NULL;
+			}
+		}	
+		mdispatchLock.UnWLock();
+	}
 }
 
 void CNetDispatch::dispatchEv(cms_net_ev *watcherRead,cms_net_ev *watcherWrite,int fd,int events)
 {
-	VDSPtr ptr = NULL;
-	mdispatchLock.RLock();
-	int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
-	assert(mfdDispatch.size() > (unsigned int)i);
-	if (mfdDispatch.size() > (unsigned int)i)
+	if (fd < 0)
 	{
-		ptr = mfdDispatch.at(i);
-		i = fd % MaxDispatchNum; //选中队列中的位置
-		if ((ptr->size() > (unsigned int)i) && ptr->at(i))
+		int nfd = ~(fd - 1); //转为正数
+		VDSPtr ptr = NULL;
+		mnegDispatchLock.RLock();
+		int i = nfd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		assert(mfdNegDispatch.size() > (unsigned int)i);
+		if (mfdNegDispatch.size() > (unsigned int)i)
 		{
-			//assert(ptr->at(i) != NULL);
-			ptr->at(i)->pushEv(fd,events,watcherRead,watcherWrite);
-		}
-	}	
-	mdispatchLock.UnRLock();
+			ptr = mfdNegDispatch.at(i);
+			i = nfd % MaxDispatchNum; //选中队列中的位置
+			if ((ptr->size() > (unsigned int)i) && ptr->at(i))
+			{
+				//assert(ptr->at(i) != NULL);
+				ptr->at(i)->pushEv(fd,events,watcherRead,watcherWrite);
+			}
+		}	
+		mnegDispatchLock.UnRLock();
+	}
+	else
+	{
+		VDSPtr ptr = NULL;
+		mdispatchLock.RLock();
+		int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		assert(mfdDispatch.size() > (unsigned int)i);
+		if (mfdDispatch.size() > (unsigned int)i)
+		{
+			ptr = mfdDispatch.at(i);
+			i = fd % MaxDispatchNum; //选中队列中的位置
+			if ((ptr->size() > (unsigned int)i) && ptr->at(i))
+			{
+				//assert(ptr->at(i) != NULL);
+				ptr->at(i)->pushEv(fd,events,watcherRead,watcherWrite);
+			}
+		}	
+		mdispatchLock.UnRLock();
+	}
 }
 
 void CNetDispatch::dispatchEv(cms_timer *ct,int fd,int events)
 {
-	VDSPtr ptr = NULL;
-	mdispatchLock.RLock();
-	int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
-	assert(mfdDispatch.size() > (unsigned int)i);
-	if (mfdDispatch.size() > (unsigned int)i)
+	if (fd < 0)
 	{
-		ptr = mfdDispatch.at(i);
-		i = fd % MaxDispatchNum; //选中队列中的位置
-		if ((ptr->size() > (unsigned int)i) && ptr->at(i))
+		int nfd = ~(fd - 1); //转为正数
+		VDSPtr ptr = NULL;
+		mnegDispatchLock.RLock();
+		int i = nfd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		assert(mfdNegDispatch.size() > (unsigned int)i);
+		if (mfdNegDispatch.size() > (unsigned int)i)
 		{
-			//assert(ptr->at(i) != NULL);
-			ptr->at(i)->pushEv(fd,events,ct);
-		}
-		else
+			ptr = mfdNegDispatch.at(i);
+			i = nfd % MaxDispatchNum; //选中队列中的位置
+			if ((ptr->size() > (unsigned int)i) && ptr->at(i))
+			{
+				//assert(ptr->at(i) != NULL);
+				ptr->at(i)->pushEv(fd,events,ct);
+			}
+			else
+			{
+				atomicDec(ct);
+			}
+		}	
+		mnegDispatchLock.UnRLock();
+	}
+	else
+	{
+		VDSPtr ptr = NULL;
+		mdispatchLock.RLock();
+		int i = fd / MaxDispatchNum; //MaxDispatchNum 个为一个队列
+		assert(mfdDispatch.size() > (unsigned int)i);
+		if (mfdDispatch.size() > (unsigned int)i)
 		{
-			atomicDec(ct);
-		}
-	}	
-	mdispatchLock.UnRLock();
+			ptr = mfdDispatch.at(i);
+			i = fd % MaxDispatchNum; //选中队列中的位置
+			if ((ptr->size() > (unsigned int)i) && ptr->at(i))
+			{
+				//assert(ptr->at(i) != NULL);
+				ptr->at(i)->pushEv(fd,events,ct);
+			}
+			else
+			{
+				atomicDec(ct);
+			}
+		}	
+		mdispatchLock.UnRLock();
+	}
 }
 
-void CNetDispatch::addOneListenDispatch(int fd, TCPListener *tls)
+cms_net_ev *CNetDispatch::addOneListenDispatch(int fd, CConnListener *tls)
 {
 	mdispatchListenLock.WLock();
 	MapTcpListenIter it = mdispatchListen.find(fd);
@@ -174,6 +281,7 @@ void CNetDispatch::addOneListenDispatch(int fd, TCPListener *tls)
 	cms_net_ev *sockIO = mallcoCmsNetEv();
 	initCmsNetEv(sockIO,acceptEV,fd,EventRead);
 	CNetMgr::instance()->cneStart(sockIO,true);
+	return sockIO;
 }
 
 void CNetDispatch::delOneListenDispatch(int fd)
@@ -191,73 +299,115 @@ void CNetDispatch::delOneListenDispatch(int fd)
 
 void CNetDispatch::dispatchAccept(cms_net_ev *watcher,int fd)
 {
-	int cfd = CMS_ERROR;
+	CConnListener *conn = NULL;
 	ConnType listenType = TypeNetNone;
-	mdispatchListenLock.RLock();
-	MapTcpListenIter it = mdispatchListen.find(fd);
-	if (it != mdispatchListen.end())
+	int cfd = CMS_ERROR;
+	CReaderWriter *tcp1udp;
+	do 
 	{
-		cfd = it->second->accept();	
-		listenType = it->second->listenType();
-	}
-	mdispatchListenLock.UnRLock();
-	if (cfd != CMS_ERROR)
-	{
-		nonblocking(cfd);
-		TCPConn *tcp = new TCPConn(cfd);
-		if (listenType == TypeHttp)
+		cfd = CMS_ERROR;
+		listenType = TypeNetNone;
+		tcp1udp = NULL;
+		mdispatchListenLock.RLock();
+		MapTcpListenIter it = mdispatchListen.find(fd);
+		if (it != mdispatchListen.end())
 		{
-			CHttpServer *hs = new CHttpServer(tcp,false);
-			if (hs->doit() != CMS_ERROR)
+			conn = it->second;
+		}
+		mdispatchListenLock.UnRLock();
+		//启动后不会创建监听socket
+		if (conn->isTcp())
+		{
+			cfd = conn->accept();	
+			if (cfd != CMS_ERROR)
 			{
-				CConnMgrInterface::instance()->addOneConn(cfd,hs);
-				hs->evReadIO();
-			}
-			else
-			{
-				delete hs;
+				listenType = conn->listenType();
+				tcp1udp = new TCPConn(cfd);
+				nonblocking(cfd);
 			}
 		}
-		else if (listenType == TypeHttps)
+		else
 		{
-			CHttpServer *hs = new CHttpServer(tcp,true);
-			if (hs->doit() != CMS_ERROR)
+			//udp 收到读事件，读取所有数据，并检测是否有新连接
+			conn->accept();
+			listenType = conn->listenType();
+			tcp1udp = (UDPConn *)conn->oneConn();
+			if (tcp1udp != NULL)
 			{
-				CConnMgrInterface::instance()->addOneConn(cfd,hs);
-				hs->evReadIO();
+				cfd = tcp1udp->fd();
+			}					
+		}
+		if (tcp1udp != NULL)
+		{			
+			if (listenType == TypeHttp)
+			{
+				logs->debug(">>>>dispatchAccept one http accept.");
+				CHttpServer *hs = new CHttpServer(tcp1udp,false);
+				if (hs->doit() != CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->addOneConn(cfd,hs);
+					hs->evReadIO();
+				}
+				else
+				{
+					delete hs;
+				}
 			}
-			else
+			else if (listenType == TypeHttps)
 			{
-				delete hs;
+				CHttpServer *hs = new CHttpServer(tcp1udp,true);
+				if (hs->doit() != CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->addOneConn(cfd,hs);
+					hs->evReadIO();
+				}
+				else
+				{
+					delete hs;
+				}
+			}
+			else if (listenType == TypeQuery)
+			{
+				CHttpServer *hs = new CHttpServer(tcp1udp,false);
+				if (hs->doit() != CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->addOneConn(cfd,hs);
+					hs->evReadIO();
+				}
+				else
+				{
+					delete hs;
+				}
+			}
+			else if (listenType == TypeRtmp)
+			{
+				logs->debug(">>>>dispatchAccept one rtmp accept.");
+				HASH hash;
+				CConnRtmp *rtmp = new CConnRtmp(hash,RtmpServerBPlayOrPublish,tcp1udp,"","");
+				if (rtmp->doit() != CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->addOneConn(cfd,rtmp);
+					if (conn->isTcp())
+					{
+						rtmp->evReadIO();
+					}					
+					else
+					{
+						//目前udp只在rtmp中使用
+						conn->oneConnRead(tcp1udp,rtmp);
+					}
+				}
+				else
+				{
+					delete rtmp;
+				}
 			}
 		}
-		else if (listenType == TypeQuery)
+		else
 		{
-			CHttpServer *hs = new CHttpServer(tcp,false);
-			if (hs->doit() != CMS_ERROR)
-			{
-				CConnMgrInterface::instance()->addOneConn(cfd,hs);
-				hs->evReadIO();
-			}
-			else
-			{
-				delete hs;
-			}
+			break;
 		}
-		else if (listenType == TypeRtmp)
-		{
-			CConnRtmp *rtmp = new CConnRtmp(RtmpServerBPlayOrPublish,tcp,"","");
-			if (rtmp->doit() != CMS_ERROR)
-			{
-				CConnMgrInterface::instance()->addOneConn(cfd,rtmp);
-				rtmp->evReadIO();
-			}
-			else
-			{
-				delete rtmp;
-			}
-		}
-	}
+	} while (true);	
 }
 
 

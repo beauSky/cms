@@ -23,7 +23,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #include <config/cms_config.h>
-#include <json/json.h>
+#include <cJSON/cJSON.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -243,6 +243,85 @@ bool CertKey::isOpenSSL()
 	return misOpen;
 }
 
+
+CUpperAddr::CUpperAddr()
+{
+
+}
+
+CUpperAddr::~CUpperAddr()
+{
+
+}
+
+void CUpperAddr::addPull(std::string addr)
+{
+	mvPullAddr.push_back(addr);
+}
+
+std::string CUpperAddr::getPull(unsigned int i)
+{
+	if (mvPullAddr.empty())
+	{
+		return "";
+	}
+	i = i % mvPullAddr.size();
+	return mvPullAddr.at(i);
+}
+
+void CUpperAddr::addPush(std::string addr)
+{
+	mvPushAddr.push_back(addr);
+}
+
+std::string CUpperAddr::getPush(unsigned int i)
+{
+	if (mvPushAddr.empty())
+	{
+		return "";
+	}
+	i = i % mvPushAddr.size();
+	return mvPushAddr.at(i);
+}
+
+
+CUdpFlag::CUdpFlag()
+{
+	misOpenUdpPull = false;
+	misOpenUdpPush = false;
+	miUdpMaxConnNum = 5000000;
+}
+
+CUdpFlag::~CUdpFlag()
+{
+
+}
+
+bool CUdpFlag::isOpenUdpPull()
+{
+	return misOpenUdpPull;
+}
+
+bool CUdpFlag::isOpenUdpPush()
+{
+	return misOpenUdpPush;
+}
+
+void CUdpFlag::setUdp(bool isPull,bool isPush)
+{
+	misOpenUdpPull = isPull;
+	misOpenUdpPush = isPush;
+}
+
+int CUdpFlag::udpConnNum()
+{
+	if (miUdpMaxConnNum < 300000)
+	{
+		miUdpMaxConnNum = 300000;
+	}
+	return miUdpMaxConnNum;
+}
+
 CConfig *CConfig::minstance = NULL;
 CConfig *CConfig::instance()
 {
@@ -264,7 +343,14 @@ void CConfig::freeInstance()
 
 CConfig::CConfig()
 {
-
+	mHttp = NULL;
+	mHttps = NULL;
+	mRtmp = NULL;
+	mQuery = NULL;
+	muaAddr = NULL;
+	mlog = NULL;
+	mcertKey = NULL;
+	mUdpFlag = NULL;
 }
 
 CConfig::~CConfig()
@@ -289,6 +375,18 @@ CConfig::~CConfig()
 	{
 		delete mlog;
 	}
+	if (mcertKey)
+	{
+		delete mcertKey;
+	}
+	if (muaAddr)
+	{
+		delete muaAddr;
+	}
+	if (mUdpFlag)
+	{
+		delete mUdpFlag;
+	}
 }
 
 bool	CConfig::init(const char *configPath)
@@ -301,77 +399,246 @@ bool	CConfig::init(const char *configPath)
 		return false;
 	}
 	fseek(fp,0,SEEK_END);
-	long size = ftell(fp);
-	if (size <= 0)
+	long len = ftell(fp);
+	if (len <= 0)
 	{
 		printf("*** [CConfig::init] file %s is empty=%ld ***\n",
-			configPath,size);
+			configPath, len);
 		fclose(fp);
 		return false;
 	}
-	char *data = new char[size+1];
+	char *data = new char[len +1];
 	fseek(fp,0,SEEK_SET);
-	int n = fread(data,1,size,fp);
-	if (n != size)
+	int n = fread(data,1, len,fp);
+	if (n != len)
 	{
 		printf("*** [CConfig::init] fread file %s fail,errno=%d,strerrno=%s ***\n",
 			configPath,errno,strerror(errno));
 		fclose(fp);
 		return false;
 	}
-	data[size] = '\0';
+	data[len] = '\0';
 	fclose(fp);
-	Json::Reader reader;
-	Json::Value  root;
-	if (!reader.parse(data,root,false))
+
+	cJSON *root = cJSON_Parse(data);
+	if (root == NULL)
 	{
 		printf("*** [CConfig::init] config file %s parse json fail %s ***\n",
-			configPath,data);
+			configPath, data);
 		delete[] data;
 		return false;
 	}
+	
 	delete[] data;
 	data = NULL;
 	//监听端口
-	Json::Value value = root["listen"];
-	if (!value.isObject())
+	cJSON *listenObject = cJSON_GetObjectItem(root, "listen");
+	if (listenObject == NULL)
 	{
 		printf("*** [CConfig::init] config file %s do not have [listen] ***\n",
 			configPath);
+		cJSON_Delete(root);
 		return false;
 	}
-	if (!value["http"].isString() || 
-		!value["https"].isString() ||
-		!value["rtmp"].isString() ||
-		!value["query"].isString())
+	string httpListen, httpsListen, rtmpListen, queryListen;
+	cJSON *T = cJSON_GetObjectItem(listenObject, "http");
+	if (T == NULL || T->type != cJSON_String)
 	{
-		printf("*** [CConfig::init] config file %s listen term do not have http/https/rtmp/query ***\n",
+		printf("*** [CConfig::init] config file %s listen term do not have http ***\n",
 			configPath);
+		cJSON_Delete(root);
 		return false;
 	}
-	mHttp = new CAddr((char *)value["http"].asString().c_str(),80);
-	mHttps = new CAddr((char *)value["https"].asString().c_str(),443);
-	mRtmp = new CAddr((char *)value["rtmp"].asString().c_str(),1935);
-	mQuery = new CAddr((char *)value["query"].asString().c_str(),8981);
-
-	//证书
-	value = root["tls"];
-	if (value.isObject())
+	httpListen = T->valuestring;
+	T = cJSON_GetObjectItem(listenObject, "https");
+	if (T == NULL || T->type != cJSON_String)
 	{
-		if (!value["cert"].isString() || 
-			!value["key"].isString() ||
-			!value["dhparam"].isString() ||
-			!value["cipher"].isString())
+		printf("*** [CConfig::init] config file %s listen term do not have https ***\n",
+			configPath);
+		cJSON_Delete(root);
+		return false;
+	}
+	httpsListen = T->valuestring;
+	T = cJSON_GetObjectItem(listenObject, "rtmp");
+	if (T == NULL || T->type != cJSON_String)
+	{
+		printf("*** [CConfig::init] config file %s listen term do not have rtmp ***\n",
+			configPath);
+		cJSON_Delete(root);
+		return false;
+	}
+	rtmpListen = T->valuestring;
+	T = cJSON_GetObjectItem(listenObject, "query");
+	if (T == NULL || T->type != cJSON_String)
+	{
+		printf("*** [CConfig::init] config file %s listen term do not have query ***\n",
+			configPath);
+		cJSON_Delete(root);
+		return false;
+	}
+	queryListen = T->valuestring;
+	
+	mHttp = new CAddr((char *)httpListen.c_str(),80);
+	mHttps = new CAddr((char *)httpsListen.c_str(),443);
+	mRtmp = new CAddr((char *)rtmpListen.c_str(),1935);
+	mQuery = new CAddr((char *)queryListen.c_str(),8981);
+
+	muaAddr = new CUpperAddr;
+	//上层节点
+	cJSON *upper = cJSON_GetObjectItem(root, "upper");
+	if (upper != NULL)
+	{
+		//pull addr
+		cJSON *pull = cJSON_GetObjectItem(upper, "pull");
+		if (pull != NULL)
 		{
-			printf("*** [CConfig::init] config file %s tls term do not have cert/key/cipher ***\n",
-				configPath);
+			if (pull->type == cJSON_Array)
+			{
+				int iSize = cJSON_GetArraySize(pull);
+				for (int i = 0; i < iSize; i++)
+				{
+					cJSON *T = cJSON_GetArrayItem(pull, i);
+					if (T->type != cJSON_String)
+					{
+						printf("***** upper pull addr is not string *****\n");
+						cJSON_Delete(root);
+						return false;
+					}
+					muaAddr->addPull(T->valuestring);
+				}
+			}
+			else
+			{
+				printf("***** upper pull config is not array *****\n");
+				cJSON_Delete(root);
+				return false;
+			}
+		}
+
+		//push addr
+		cJSON *push = cJSON_GetObjectItem(upper, "push");
+		if (push != NULL)
+		{
+			if (push->type == cJSON_Array)
+			{
+				int iSize = cJSON_GetArraySize(push);
+				for (int i = 0; i < iSize; i++)
+				{
+					cJSON *T = cJSON_GetArrayItem(push, i);
+					if (T->type != cJSON_String)
+					{
+						printf("***** upper push addr is not string *****\n");
+						cJSON_Delete(root);
+						return false;
+					}
+					muaAddr->addPush(T->valuestring);
+				}
+			}
+			else
+			{
+				printf("***** upper push config is not array *****\n");
+				cJSON_Delete(root);
+				return false;
+			}
+		}
+	}
+	//udp 属性
+	mUdpFlag = new CUdpFlag;
+	cJSON *udp = cJSON_GetObjectItem(root, "udp");
+	if (udp != NULL &&
+		udp->type == cJSON_Object)
+	{
+		bool isOpenPull = false;
+		bool isOpenPush = false;
+		//pull flag
+		cJSON *T = cJSON_GetObjectItem(udp, "open_pull");
+		if (T != NULL &&
+			(T->type == cJSON_True || T->type == cJSON_False))
+		{
+			if (T->type == cJSON_True)
+			{
+				isOpenPull = true;
+			}
+		}
+		else
+		{
+			printf("***** udp open_pull config is not bool *****\n");
+			cJSON_Delete(root);
 			return false;
 		}
-		FILE *fp = fopen(value["cert"].asString().c_str(),"rb");
+
+		//push flag
+		T = cJSON_GetObjectItem(udp, "open_push");
+		if (T != NULL &&
+			(T->type == cJSON_True || T->type == cJSON_False))
+		{
+			if (T->type == cJSON_True)
+			{
+				isOpenPush = true;
+			}			
+		}
+		else
+		{
+			printf("***** udp open_push config is not bool *****\n");
+			cJSON_Delete(root);
+			return false;
+		}
+
+		mUdpFlag->setUdp(isOpenPull,isOpenPush);
+	}
+
+	//证书
+	cJSON *tls = cJSON_GetObjectItem(root, "tls");
+	if (tls != NULL
+		&& tls->type == cJSON_Object)
+	{
+		string cert, key, dhparam, cipher;
+		T = cJSON_GetObjectItem(tls, "cert");
+		if (T == NULL || T->type != cJSON_String)
+		{
+			printf("*** [CConfig::init] config file %s tls term do not have cert ***\n",
+				configPath);
+			cJSON_Delete(root);
+			return false;
+		}
+		cert = T->valuestring;
+
+		T = cJSON_GetObjectItem(tls, "key");
+		if (T == NULL || T->type != cJSON_String)
+		{
+			printf("*** [CConfig::init] config file %s tls term do not have key ***\n",
+				configPath);
+			cJSON_Delete(root);
+			return false;
+		}
+		key = T->valuestring;
+
+		T = cJSON_GetObjectItem(tls, "dhparam");
+		if (T == NULL || T->type != cJSON_String)
+		{
+			printf("*** [CConfig::init] config file %s tls term do not have dhparam ***\n",
+				configPath);
+			cJSON_Delete(root);
+			return false;
+		}
+		dhparam = T->valuestring;
+
+		T = cJSON_GetObjectItem(tls, "cipher");
+		if (T == NULL || T->type != cJSON_String)
+		{
+			printf("*** [CConfig::init] config file %s tls term do not have cipher ***\n",
+				configPath);
+			cJSON_Delete(root);
+			return false;
+		}
+		cipher = T->valuestring;
+		
+		FILE *fp = fopen(cert.c_str(),"rb");
 		if (fp == NULL)
 		{
 			printf("*** [CConfig::init] open cert file %s fail,errstr=%s ***\n",
-				value["cert"].asString().c_str(),strerror(errno));
+				cert.c_str(),strerror(errno));
+			cJSON_Delete(root);
 			return false;
 		}
 		fseek(fp,0,SEEK_END);
@@ -382,12 +649,13 @@ bool	CConfig::init(const char *configPath)
 		pcert[len] = '\0';
 		fclose(fp);		
 
-		fp = fopen(value["key"].asString().c_str(),"rb");
+		fp = fopen(key.c_str(),"rb");
 		if (fp == NULL)
 		{
 			printf("*** [CConfig::init] open key file %s fail,errstr=%s ***\n",
-				value["cert"].asString().c_str(),strerror(errno));
+				key.c_str(),strerror(errno));
 			delete[] pcert;
+			cJSON_Delete(root);
 			return false;
 		}
 		fseek(fp,0,SEEK_END);
@@ -398,12 +666,13 @@ bool	CConfig::init(const char *configPath)
 		pkey[len] = '\0';
 		fclose(fp);
 
-		fp = fopen(value["dhparam"].asString().c_str(),"rb");
+		fp = fopen(dhparam.c_str(),"rb");
 		if (fp == NULL)
 		{
 			printf("*** [CConfig::init] open dhparam file %s fail,errstr=%s ***\n",
-				value["cert"].asString().c_str(),strerror(errno));
+				dhparam.c_str(),strerror(errno));
 			delete[] pcert;
+			cJSON_Delete(root);
 			return false;
 		}
 		fseek(fp,0,SEEK_END);
@@ -417,7 +686,7 @@ bool	CConfig::init(const char *configPath)
 		mcertKey = new CertKey(pcert,
 			pkey,
 			pdhparam,
-			(char *)value["cipher"].asString().c_str());
+			(char *)cipher.c_str());
 
 		delete[] pcert;
 		delete[] pkey;
@@ -429,44 +698,76 @@ bool	CConfig::init(const char *configPath)
 	}
 
 	//日志
-	value = root["log"];
-	if (!value.isObject())
+	cJSON* log = cJSON_GetObjectItem(root, "log");
+	if (log == NULL || log->type != cJSON_Object)
 	{
 		printf("*** [CConfig::init] config file %s do not have [log] ***\n",
 			configPath);
+		cJSON_Delete(root);
 		return false;
 	}
-	if (!value["file"].isString() ||
-		!value["size"].isNumeric() ||
-		!value["level"].isString())
+	string file, level;
+	int size = 0;
+	T = cJSON_GetObjectItem(log, "file");
+	if (T == NULL || T->type != cJSON_String)
 	{
-		printf("*** [CConfig::init] config file %s [log] term path/size error ***\n",
+		printf("*** [CConfig::init] config file %s log term do no have file ***\n",
 			configPath);
+		cJSON_Delete(root);
 		return false;
 	}
-	mlog = new Clog((char *)value["file"].asString().c_str(),
-		(char *)value["level"].asString().c_str(),
-		value["console"].isBool()?value["console"].asBool():false,
-		value["size"].asInt());
+	file = T->valuestring;
+
+	T = cJSON_GetObjectItem(log, "size");
+	if (T == NULL || T->type != cJSON_Number)
+	{
+		printf("*** [CConfig::init] config file %s log term do no have size ***\n",
+			configPath);
+		cJSON_Delete(root);
+		return false;
+	}
+	size = T->valueint;
+
+	T = cJSON_GetObjectItem(log, "level");
+	if (T == NULL || T->type != cJSON_String)
+	{
+		printf("*** [CConfig::init] config file %s log term do no have level ***\n",
+			configPath);
+		cJSON_Delete(root);
+		return false;
+	}
+	level = T->valuestring;
+
+	bool console = false;
+	T = cJSON_GetObjectItem(log, "console");
+	if (T == NULL || T->type == cJSON_True)
+	{
+		console = true;
+	}
+	
+	mlog = new Clog((char *)file.c_str(),
+		(char *)level.c_str(),
+		console,
+		size);
 	return true;
 }
 
-CAddr   *CConfig::addrHttp()
+CAddr *CConfig::addrHttp()
 {
 	return mHttp;
 }
 
-CAddr	*CConfig::addrHttps()
+CAddr *CConfig::addrHttps()
 {
 	return mHttps;
 }
 
-CAddr	*CConfig::addrRtmp()
+CAddr *CConfig::addrRtmp()
 {
 	return mRtmp;
 }
 
-CAddr	*CConfig::addrQuery()
+CAddr *CConfig::addrQuery()
 {
 	return mQuery;
 }
@@ -476,7 +777,17 @@ CertKey *CConfig::certKey()
 	return mcertKey;
 }
 
-Clog	*CConfig::clog()
+Clog *CConfig::clog()
 {
 	return mlog;
+}
+
+CUpperAddr *CConfig::upperAddr()
+{
+	return muaAddr;
+}
+
+CUdpFlag *CConfig::udpFlag()
+{
+	return mUdpFlag;
 }

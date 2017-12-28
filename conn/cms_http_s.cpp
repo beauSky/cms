@@ -34,7 +34,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <ts/cms_hls_mgr.h>
 #include <regex.h>
 
-std::string gCrossDomainRsp = "HTTP/1.1 200 OK\r\nServer: quick rtmp\r\nConnection: keep-alive\r\nContent-Length: 189\r\nContent-Type: text/xml\r\n\r\n<?xml version=\"1.0\"?><!DOCTYPE cross-domain-policy SYSTEM \"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd\"><cross-domain-policy><allow-access-from domain=\"*\" /></cross-domain-policy>";
+std::string gCrossDomainRsp = "HTTP/1.1 200 OK\r\nServer: quick rtmp\r\nConnection: keep-alive\r\nContent-Length: 189\r\nContent-Type: text/xml\r\r\n<?xml version=\"1.0\"?><!DOCTYPE cross-domain-policy SYSTEM \"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd\"><cross-domain-policy><allow-access-from domain=\"*\" /></cross-domain-policy>";
 
 CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 {
@@ -96,14 +96,20 @@ CHttpServer::~CHttpServer()
 		mremoteAddr.c_str());
 	if (mwatcherReadIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherReadIO);
+		if (isUdpAddrEmpty(mrw->udpAddr()) || (!isUdpAddrEmpty(mrw->udpAddr()) && mrw->fd() > 0))//udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherReadIO);
+		}
 		freeCmsNetEv(mwatcherReadIO);
 		logs->debug("######### %s [CHttpServer::~CHttpServer] stop read io ",
 			mremoteAddr.c_str());
 	}
 	if (mwatcherWriteIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		if (isUdpAddrEmpty(mrw->udpAddr()) || (!isUdpAddrEmpty(mrw->udpAddr()) && mrw->fd() > 0))//udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		}
 		freeCmsNetEv(mwatcherWriteIO);
 		logs->debug("######### %s [CHttpServer::~CHttpServer] stop write io ",
 			mremoteAddr.c_str());
@@ -213,24 +219,42 @@ std::string CHttpServer::getRemoteIP()
 	return mremoteIP;
 }
 
-cms_net_ev *CHttpServer::evReadIO()
+cms_net_ev *CHttpServer::evReadIO(cms_net_ev *ev)
 {
 	if (mwatcherReadIO == NULL)
 	{
-		mwatcherReadIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
-		CNetMgr::instance()->cneStart(mwatcherReadIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherReadIO = ev;
+		}
+		else
+		{			
+			mwatcherReadIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
+			CNetMgr::instance()->cneStart(mwatcherReadIO);
+		}
 	}
 	return mwatcherReadIO;
 }
 
-cms_net_ev *CHttpServer::evWriteIO()
+cms_net_ev *CHttpServer::evWriteIO(cms_net_ev *ev)
 {
 	if (mwatcherWriteIO == NULL)
 	{
-		mwatcherWriteIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
-		CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherWriteIO = ev;
+		}
+		else
+		{			
+			mwatcherWriteIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
+			CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		}
 	}
 	return mwatcherWriteIO;
 }
@@ -879,7 +903,7 @@ void CHttpServer::tryCreateTask()
 {
 	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
 	{
-		CTaskMgr::instance()->createTask(murl,"",murl,mreferer,CREATE_ACT_PULL,false,false);
+		CTaskMgr::instance()->createTask(mHash,murl,"",murl,mreferer,CREATE_ACT_PULL,false,false);
 	}
 }
 
@@ -887,6 +911,7 @@ void CHttpServer::down8upBytes()
 {
 	if (misFlvRequest)
 	{
+
 		unsigned long tt = getTickCount();
 		if (tt - mspeedTick > 1000)
 		{
@@ -919,4 +944,9 @@ void CHttpServer::down8upBytes()
 			}
 		}
 	}
+}
+
+CReaderWriter *CHttpServer::rwConn()
+{
+	return mrw;
 }

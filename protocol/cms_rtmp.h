@@ -148,6 +148,8 @@ private:
 	RtmpType		mrtmpType;
 	RtmpConnStatus	mrtmpStatus;
 
+	bool			misCanDoTransmission;
+
 	//rtmp 协议相关
 	//read
 	bool			misFMLEPublish;//针对flash执行不同逻辑

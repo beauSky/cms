@@ -66,17 +66,29 @@ void CConnMgr::addOneConn(int fd,Conn *c)
 void CConnMgr::delOneConn(int fd)
 {
 	CNetDispatch::instance()->delOneDispatch(fd);
+	Conn *conn = NULL;
 	mfdConnLock.WLock();
 	MapConnInter it = mfdConn.find(fd);
 	if (it != mfdConn.end())
 	{
 		mfdConn.erase(it);
-		if (it->second)
-		{
-			delete it->second;
-		}
+		conn = it->second;		
 	}
-	mfdConnLock.UnWLock();	
+	mfdConnLock.UnWLock();
+	if (conn)
+	{
+		CReaderWriter *crw = conn->rwConn(); //获取udp
+		UdpAddr ua = crw->udpAddr(); //获取udp对端peer
+		if (!isUdpAddrEmpty(ua))
+		{
+			UDPListener *uls = (UDPListener *)ua.mlistener; //获取对应的udp listener
+			if (uls != NULL)
+			{
+				uls->delOneConn(ua);//从 listener 删除
+			}
+		}
+		delete conn;
+	}
 }
 
 //TEST
@@ -88,8 +100,6 @@ CLock gCSendTakeTime;
 void CConnMgr::dispatchEv(FdEvents *fe)
 {
 	unsigned long tB = getTickCount();
-
-
 	bool isSucc = true;
 	mfdConnLock.RLock();
 	MapConnInter it = mfdConn.find(fe->fd);
@@ -102,6 +112,10 @@ void CConnMgr::dispatchEv(FdEvents *fe)
 			isSucc = false;
 			it->second->stop("");
 		}
+	}
+	else
+	{
+		logs->debug(">>>>CConnMgr::dispatchEv not find sock %d.",fe->fd);
 	}
 	mfdConnLock.UnRLock();
 	if (!isSucc)
@@ -118,7 +132,7 @@ void CConnMgr::dispatchEv(FdEvents *fe)
 		isPrintf = true;
 		gCSendTakeTimeTT = sendTakeTimeTT;
 	}
-	printTakeTime(gmapCSendTakeTime,tB,tE,"CConnMgr",isPrintf);
+	printTakeTime(gmapCSendTakeTime,tB,tE,(char *)"CConnMgr",isPrintf);
 	gCSendTakeTime.Unlock();
 }
 
@@ -180,7 +194,7 @@ bool CConnMgr::run()
 	{
 		char date[128] = {0};
 		getTimeStr(date);
-		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 		return false;
 	}
 	return true;
@@ -286,67 +300,116 @@ void CConnMgrInterface::freeInstance()
 
 void CConnMgrInterface::addOneConn(int fd,Conn *c)
 {
-	int i = fd % NUM_OF_THE_CONN_MGR;
+	int i = 0;
+	if (fd < 0)
+	{
+		i = (~(fd-1)) % NUM_OF_THE_CONN_MGR;
+	}
+	else
+	{
+		i = fd % NUM_OF_THE_CONN_MGR;
+	}
 	mconnMgrArray[i]->addOneConn(fd,c);
 }
 
 void CConnMgrInterface::delOneConn(int fd)
 {
-	int i = fd % NUM_OF_THE_CONN_MGR;
+	int i = 0;
+	if (fd < 0)
+	{
+		i = (~(fd-1)) % NUM_OF_THE_CONN_MGR;
+	}
+	else
+	{
+		i = fd % NUM_OF_THE_CONN_MGR;
+	}
 	mconnMgrArray[i]->delOneConn(fd);
 }
 
-Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
-									,ConnType connectType,RtmpType rtmpType)
+Conn *CConnMgrInterface::createConn(HASH &hash,char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
+									,ConnType connectType,RtmpType rtmpType,bool isTcp/* = true*/)
 {
 	Conn *conn = NULL;
-	TCPConn *tcp = new TCPConn();
-	if (tcp->dialTcp(addr,connectType) == CMS_ERROR)
+	if (isTcp)
 	{
-		return NULL;
-	}
-	if (connectType == TypeHttp || connectType == TypeHttps)
-	{
-		ChttpClient *http = new ChttpClient(tcp,pullUrl,oriUrl,strReferer,connectType == TypeHttp?false:true);
-		if (http->doit() != CMS_ERROR)
+		TCPConn *tcp = new TCPConn();
+		if (tcp->dialTcp(addr,connectType) == CMS_ERROR)
 		{
-			CConnMgrInterface::instance()->addOneConn(tcp->fd(),http);
-
-			http->evReadIO();
-			http->evWriteIO();
-			conn = http;
-			if (tcp->connect() == CMS_ERROR)
+			return NULL;
+		}
+		if (connectType == TypeHttp || connectType == TypeHttps)
+		{
+			ChttpClient *http = new ChttpClient(hash,tcp,pullUrl,oriUrl,strReferer,connectType == TypeHttp?false:true);
+			if (http->doit() != CMS_ERROR)
 			{
-				CConnMgrInterface::instance()->delOneConn(tcp->fd());
+				CConnMgrInterface::instance()->addOneConn(tcp->fd(),http);
+
+				http->evReadIO();
+				http->evWriteIO();
+				conn = http;
+				if (tcp->connect() == CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->delOneConn(tcp->fd());
+					delete http;
+					conn = NULL;
+				}
+			}
+			else
+			{
 				delete http;
-				conn = NULL;
 			}
 		}
-		else
+		else if (connectType == TypeRtmp)
 		{
-			delete http;
+			CConnRtmp *rtmp = new CConnRtmp(hash,rtmpType,tcp,pullUrl,pushUrl);
+			if (rtmp->doit() != CMS_ERROR)
+			{
+				CConnMgrInterface::instance()->addOneConn(tcp->fd(),rtmp);
+
+				rtmp->evReadIO();
+				rtmp->evWriteIO();
+				conn = rtmp;
+				if (tcp->connect() == CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->delOneConn(tcp->fd());
+					delete rtmp;
+					conn = NULL;
+				}
+			}
+			else
+			{
+				delete rtmp;
+			}
 		}
 	}
-	else if (connectType == TypeRtmp)
+	else
 	{
-		CConnRtmp *rtmp = new CConnRtmp(rtmpType,tcp,pullUrl,pushUrl);
-		if (rtmp->doit() != CMS_ERROR)
+		UDPConn *udp = new UDPConn();
+		if (udp->dialUdp(addr,connectType) == CMS_ERROR)
 		{
-			CConnMgrInterface::instance()->addOneConn(tcp->fd(),rtmp);
-
-			rtmp->evReadIO();
-			rtmp->evWriteIO();
-			conn = rtmp;
-			if (tcp->connect() == CMS_ERROR)
-			{
-				CConnMgrInterface::instance()->delOneConn(tcp->fd());
-				delete rtmp;
-				conn = NULL;
-			}
+			return NULL;
 		}
-		else
+		if (connectType == TypeRtmp)
 		{
-			delete rtmp;
+			CConnRtmp *rtmp = new CConnRtmp(hash,rtmpType,udp,pullUrl,pushUrl);
+			if (rtmp->doit() != CMS_ERROR)
+			{
+				CConnMgrInterface::instance()->addOneConn(udp->fd(),rtmp);
+
+				rtmp->evReadIO();
+				rtmp->evWriteIO();
+				conn = rtmp;
+				if (udp->connect() == CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->delOneConn(udp->fd());
+					delete rtmp;
+					conn = NULL;
+				}
+			}
+			else
+			{
+				delete rtmp;
+			}
 		}
 	}
 	return conn;
@@ -361,8 +424,8 @@ void *CConnMgrInterface::routinue(void *param)
 
 void CConnMgrInterface::thread()
 {
-	logs->info(">>>>> CConnMgrInterface thread pid=%d\n",gettid());
-	logs->info(">>>>> CConnMgrInterface thread leave pid=%d\n",gettid());
+	logs->info(">>>>> CConnMgrInterface thread pid=%d",gettid());
+	logs->info(">>>>> CConnMgrInterface thread leave pid=%d",gettid());
 }
 
 bool CConnMgrInterface::run()
@@ -373,7 +436,7 @@ bool CConnMgrInterface::run()
 	{
 		char date[128] = {0};
 		getTimeStr(date);
-		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 		return false;
 	}
 	return true;

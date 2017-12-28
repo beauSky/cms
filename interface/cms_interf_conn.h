@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_INTERFACE_CONN_H__
 #include <string>
 #include <common/cms_var.h>
+#include <interface/cms_read_write.h>
 
 class Conn
 {
@@ -39,12 +40,13 @@ public:
 	virtual std::string getPushUrl() = 0;
 	virtual std::string getRemoteIP() = 0;
 
-	virtual cms_net_ev    *evReadIO() = 0;
-	virtual cms_net_ev    *evWriteIO() = 0;
+	virtual cms_net_ev    *evReadIO(cms_net_ev *ev = NULL) = 0;
+	virtual cms_net_ev    *evWriteIO(cms_net_ev *ev = NULL) = 0;
 
 	virtual void down8upBytes() = 0;
-
 	virtual void reset() = 0;
+
+	virtual CReaderWriter *rwConn() = 0;
 
 	//http สนำร
 	virtual int  doDecode() = 0;

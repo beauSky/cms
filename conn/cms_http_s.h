@@ -45,9 +45,12 @@ public:
 	std::string getUrl();
 	std::string getPushUrl(){return "";};
 	std::string getRemoteIP();
-	cms_net_ev    *evReadIO();
-	cms_net_ev    *evWriteIO();
+	cms_net_ev    *evReadIO(cms_net_ev *ev = NULL);
+	cms_net_ev    *evWriteIO(cms_net_ev *ev = NULL);
 	void down8upBytes();
+
+	CReaderWriter *rwConn();
+
 	void reset();
 	int  doDecode();
 	int  doReadData(){return CMS_OK;};

@@ -28,22 +28,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <assert.h>
 
 
-CFlvTransmission::CFlvTransmission(CProtocol *protocol)
+CFlvTransmission::CFlvTransmission(CProtocol *protocol, bool isPushTask/* = false*/)
 {
 	mllMetaDataIdx = -1;
 	mllFirstVideoIdx = -1;
 	mllFirstAudioIdx = -1;
 	mllTransIdx = -1;
 	misChangeFirstVideo = false;
+	misTaskRestart = false;
 	mchangeFristVideoTimes = 0;
 	mprotocol = protocol;
 	misWaterMark = false;
 	mwaterMarkOriHashIdx = 0;
 	mcacheTT = 0;
 	msliceFrameRate = 0;
+	misPushTask = isPushTask;
 	mfastBitRate = new CFastBitRate;
 	mdurationtt = new CDurationTimestamp();
 	mfirstPlay = new CFirstPlay();
+	mullTransUid = 0;
 }
 
 CFlvTransmission::~CFlvTransmission()
@@ -147,39 +150,23 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 	int  dropPer = 0;
 	bool isVideo = false;
 	bool isAudio = false;
+	bool isTransPlay = false;
+	bool isExist = false;
+	bool isPublishTask = false;
+	bool isTaskRestart = false;
+	bool isMetaDataChanged = false;
+	bool isFirstVideoAudioChanged = false;
 	getSliceFrameRate();
 	uint32 tt = getTickCount();
 	do 
 	{
-		if (!CFlvPool::instance()->isExist(mreadHashIdx,mreadHash))
-		{			
-			ret = 2;
-			break;
-		}
-		if (CFlvPool::instance()->isMetaDataChange(mreadHashIdx,mreadHash,mllMetaDataIdx))
-		{
-			if (doMetaData() == CMS_ERROR)
-			{
-				ret = -1;
-				break;
-			}
-		}
-		if (CFlvPool::instance()->isFirstVideoChange(mreadHashIdx,mreadHash,mllFirstVideoIdx))
-		{
-			if (doFirstVideoAudio(true) == CMS_ERROR)
-			{
-				ret = -1;
-				break;
-			}
-		}
-		if (CFlvPool::instance()->isFirstAudioChange(mreadHashIdx,mreadHash,mllFirstAudioIdx))
-		{
-			if (doFirstVideoAudio(false) == CMS_ERROR)
-			{
-				ret = -1;
-				break;
-			}
-		}
+		isTransPlay = false;
+		isExist = false;
+		isPublishTask = false;
+		isTaskRestart = false;
+		isMetaDataChanged = false;
+		isFirstVideoAudioChanged = false;
+		
 		//首播丢帧初始化
 		if (!mfirstPlay->isInit())
 		{
@@ -198,14 +185,39 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			//设置网络层发送缓冲 结束
 			mfirstPlay->init(mreadHash,mreadHashIdx,mprotocol->remoteAddr(),"flv",mprotocol->getUrl());
 		}
-		if (!mfirstPlay->checkfirstPlay())
+		if (!misPushTask && !mfirstPlay->checkfirstPlay())
 		{
 			ret = 0;
 			break;
 		}		
 		//首播丢帧初始化 结束
 		sliceNum = 0;
-		flvPoolCode = CFlvPool::instance()->readSlice(mreadHashIdx,mreadHash,mllTransIdx,&s,sliceNum);
+		flvPoolCode = CFlvPool::instance()->readSlice(mreadHashIdx,mreadHash,mllTransIdx,&s,sliceNum, isTransPlay, 
+			mllMetaDataIdx, mllFirstVideoIdx, mllFirstAudioIdx,isExist, isTaskRestart, isPublishTask, isMetaDataChanged, isFirstVideoAudioChanged, mullTransUid);
+
+		if (misPushTask && !isPublishTask)
+		{
+			//只有推流任务才能转推
+			if (s != NULL)
+			{
+				atomicDec(s);
+			}
+			ret = -1;
+			logs->error("*** %s [CFlvTransmission::doTransmission] %s doTransmission is pushing task but read task is not publish task ***",
+				mprotocol->remoteAddr().c_str(), mprotocol->getUrl().c_str());
+			break;
+		}
+
+		if (!isExist)
+		{
+			ret = 2;
+			if (s != NULL)
+			{
+				atomicDec(s);
+			}
+			break;
+		}
+
 		if (flvPoolCode == FlvPoolCodeError)
 		{
 			logs->error("*** %s [CFlvTransmission::doTransmission] %s doTransmission task is missing ***",
@@ -214,7 +226,68 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			break;
 		}
 		else if (flvPoolCode == FlvPoolCodeOK)
-		{			
+		{
+			//metaData 改变
+			if (isMetaDataChanged)
+			{
+				if (doMetaData() == CMS_ERROR)
+				{
+					if (s != NULL)
+					{
+						atomicDec(s);
+					}
+					ret = -1;
+					break;
+				}				
+			}
+			//首帧改变
+			if (isFirstVideoAudioChanged)
+			{
+				if (CFlvPool::instance()->isFirstVideoChange(mreadHashIdx, mreadHash, mllFirstVideoIdx))
+				{
+					if (doFirstVideoAudio(true) == CMS_ERROR)
+					{
+						if (s != NULL)
+						{
+							atomicDec(s);
+						}
+						ret = -1;
+						break;
+					}
+				}
+				if (CFlvPool::instance()->isFirstAudioChange(mreadHashIdx, mreadHash, mllFirstAudioIdx))
+				{
+					if (doFirstVideoAudio(false) == CMS_ERROR)
+					{
+						if (s != NULL)
+						{
+							atomicDec(s);
+						}
+						ret = -1;
+						break;
+					}
+				}
+			}
+			//如果首帧改变 刚连上来的用户有可能发送的是旧的数据帧 花屏
+			if (mllTransIdx == -1  && mllFirstVideoIdx != -1 && s->mllIndex < mllFirstVideoIdx)
+			{
+				mllTransIdx = mllFirstVideoIdx<mllFirstAudioIdx ? mllFirstVideoIdx-1:mllFirstAudioIdx-1;
+				if (s != NULL)
+				{
+					atomicDec(s);
+				}
+				continue;
+			}
+			if (mllTransIdx == -1 && mllFirstAudioIdx != -1 && s->mllIndex < mllFirstAudioIdx)
+			{
+				mllTransIdx = mllFirstVideoIdx<mllFirstAudioIdx ? mllFirstVideoIdx-1:mllFirstAudioIdx-1;
+				if (s != NULL)
+				{
+					atomicDec(s);
+				}
+				continue;
+			}
+			//如果首帧改变 刚连上来的用户有可能发送的是旧的数据帧 花屏 结束
 			if (!mfastBitRate->isInit())
 			{
 				mfastBitRate->init(mprotocol->remoteAddr(),"flv",mprotocol->getUrl(),misWaterMark,
@@ -230,21 +303,33 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			{
 				needSend = true;
 				//首播丢帧
-				if (!mfirstPlay->checkShouldDropFrameCount(mllTransIdx,s))
+				if (!misPushTask && !mfirstPlay->checkShouldDropFrameCount(mllTransIdx,s))
 				{
 					ret = 0;
+					if (s != NULL)
+					{
+						atomicDec(s);
+					}
 					continue;
 				}
-				needSend = !mfirstPlay->needDropFrame(s);				
+				needSend = !mfirstPlay->needDropFrame(s);
+				if (!misPushTask)
+				{
+					//推流没有首播丢帧
+					needSend = true;
+				}
 				//首播丢帧 结束
 				isVideo = s->miDataType == DATA_TYPE_VIDEO;
 				isAudio = s->miDataType == DATA_TYPE_AUDIO;
 				
 				uiTimestamp = s->muiTimestamp;
 				bool isMergerFrame = false;
-				if (mfastBitRate->isChangeBitRate() ||
+				if (mfastBitRate->isChangeBitRate() || 
+					misTaskRestart ||
 					(misChangeFirstVideo && mchangeFristVideoTimes > 1))
 				{
+					misTaskRestart = false;
+					misChangeFirstVideo = false;
 					Slice *fs = NULL;
 					if (CFlvPool::instance()->readRirstVideoAudioSlice(mreadHashIdx,mreadHash,&fs,true) == FlvPoolCodeError)
 					{
@@ -404,6 +489,9 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			mllMetaDataIdx = -1;
 			mllFirstVideoIdx = -1;
 			mllFirstAudioIdx = -1;
+
+			mullTransUid = 0;
+			misTaskRestart = true; //很有可能码率切换了
 
 			uint32 sendTimestamp = 0;
 			if (s != NULL)

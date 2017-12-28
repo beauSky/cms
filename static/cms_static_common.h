@@ -29,7 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define PACKET_ONE_TASK_DOWNLOAD	0x00
 #define PACKET_ONE_TASK_UPLOAD		0x01
-#define PACKET_ONE_TASK_MEDA		0x02
+#define PACKET_ONE_TASK_MEDIA		0x02
 #define PACKET_ONE_TASK_MEM			0x03
 
 #define PACKET_CONN_ADD				0x01
@@ -45,7 +45,7 @@ struct OneTaskDownload
 {
 	int		packetID;
 	HASH	hash;
-	int32	downloadBytes;
+	int32	downloadBytes;					//下载字节数
 	bool	isRemove;
 };
 
@@ -53,7 +53,7 @@ struct OneTaskUpload
 {
 	int		packetID;
 	HASH	hash;
-	int32	uploadBytes;
+	int32	uploadBytes;					//上传字节数
 	int		connAct;
 };
 
@@ -61,14 +61,17 @@ struct OneTaskMeida
 {
 	int				packetID;
 	HASH			hash;
-	int32			videoFramerate;
-	int32			audioFramerate;
-	int32			audioSamplerate;
-	int32			mediaRate;
-	std::string		videoType;
-	std::string		audioType;
-	std::string		remoteAddr;
-	std::string		url;
+	int32			videoFramerate;			//视频帧率
+	int32			audioFramerate;			//音频帧率
+	int32			audioSamplerate;		//音频采样率
+	int32			mediaRate;				//直播流码率
+	int32			width;					//视频宽
+	int32			height;					//视频高
+	std::string		videoType;				//视频类型
+	std::string		audioType;				//音频类型
+	std::string		remoteAddr;				//对端ip:port
+	std::string		url;					//url地址
+	bool			isUdp;				    //是否是udp连接
 };
 
 struct OneTaskMem 
@@ -81,22 +84,24 @@ struct OneTaskMem
 struct OneTask
 {
 	std::string		murl;
-	int64			mdownloadTotal;
+	int64			mdownloadTotal;		//用于统计下载速度
 	int64			mdownloadTick;
 	int64			mdownloadSpeed;
 	uint64			mdownloadTT;
 
-	int64			muploadTotal;
+	int64			muploadTotal;		//用于统计上传速度
 	int64			muploadTick;
 	int64			muploadSpeed;
 	uint64			muploadTT;
 
-	int32			mmediaRate;
-	int32			mvideoFramerate;
-	int32			maudioFramerate;
-	int32			maudioSamplerate;
-	std::string		mvideoType;
-	std::string		maudioType;
+	int32			mmediaRate;			//直播流码率
+	int32			mvideoFramerate;	//视频帧率
+	int32			maudioFramerate;	//音频帧率
+	int32			maudioSamplerate;	//音频采样率
+	int32			miWidth;			//视频宽
+	int32			miHeight;			//视频高
+	std::string		mvideoType;			//视频类型
+	std::string		maudioType;			//音频类型
 
 	int32			mtotalConn;			//该任务当前连接数
 	std::string		mreferer;			//refer
@@ -105,6 +110,8 @@ struct OneTask
 
 	time_t			mttCreate;
 	std::string		mremoteAddr;
+
+	bool			misUDP;
 };
 
 struct CpuInfo 
@@ -143,10 +150,10 @@ typedef struct
 
 OneTask *newOneTask();
 //static 函数
-void makeOneTaskDownload(HASH &hash,int32 downloadBytes,bool isRemove);
-void makeOneTaskupload(HASH	&hash,int32 uploadBytes,int connAct);
-void makeOneTaskMedia(HASH	&hash,int32 videoFramerate,int32 audioFramerate,
-					  int32 audioSamplerate,int32 mediaRate,std::string videoType,
-					  std::string audioType,std::string url,std::string remoteAddr);
-void makeOneTaskMem(HASH &hash,int64	totalMem);
+void makeOneTaskDownload(HASH &hash,int32 downloadBytes,bool isRemove);										//统计下载任务
+void makeOneTaskupload(HASH	&hash,int32 uploadBytes,int connAct);											//统计上传任务
+void makeOneTaskMedia(HASH	&hash,int32 videoFramerate,int32 audioFramerate,int32 iWidth, int32 iHeight,	//统计任务媒体信息
+	int32 audioSamplerate,int32 mediaRate,std::string videoType,std::string audioType, std::string url, 
+	std::string remoteAddr,	bool isUdp);
+void makeOneTaskMem(HASH &hash,int64 totalMem);																//统计内存占用
 #endif

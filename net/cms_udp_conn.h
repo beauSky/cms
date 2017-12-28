@@ -22,25 +22,43 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#ifndef __CMS_TCP_CONN_H__
-#define __CMS_TCP_CONN_H__
+#ifndef __CMS_UDP_CONN_H__
+#define __CMS_UDP_CONN_H__
 #include <interface/cms_read_write.h>
 #include <interface/cms_conn_listener.h>
+#include <kcp/ikcp.h>
+#include <core/cms_thread.h>
 #include <common/cms_type.h>
+#include <net/cms_net_var.h>
+#include <net/cms_udp_timer.h>
 #include <core/cms_lock.h>
 #include <netinet/in.h>
 #include <string>
 #include <queue>
+#include <list>
+#include <map>
 using namespace std;
 
-class TCPConn:public CReaderWriter
+#define	MTU_LIMIT			2048
+#define KCP_QUEUE_LIMIT		1024
+
+typedef struct _UdpMsg{
+	UdpAddr mua;
+	char	*mdata;
+	int		mlen;
+	IUINT32 mconv;
+}UdpMsg;
+
+void initUdpSocket();
+
+class UDPConn:public CReaderWriter
 {
 public:
-	TCPConn(int fd);
-	TCPConn();
-	~TCPConn();
+	UDPConn(UdpAddr ua,IUINT32 conv,int fd,unsigned long ipInt,unsigned short port,bool isListen,ConnType connectType);
+	UDPConn();
+	~UDPConn();
 
-	int   dialTcp(char *addr,ConnType connectType);
+	int   dialUdp(char *addr,ConnType connectType);
 	int	  connect();
 	int   read(char* dstBuf,int len,int &nread);
 	int   write(char *srcBuf,int len,int &nwrite);
@@ -63,9 +81,23 @@ public:
 	int   flushR();
 	int   flushW(uint64 uid);
 	UdpAddr udpAddr();
+	void  recvData();
+
+	void evWriteIO(cms_net_ev *ev);
+
+	void  pushUM(UdpMsg *um);	
 private:
+	bool  popUM(UdpMsg **um);
+	void  ticker();
+
+	cms_udp_timer *mtimer;
+	uint64		  muid;
+	int           mtickerDo;
+
+	bool misListen;
+	int mlsFd;
+	int mfd;	
 	UdpAddr mua;
-	int mfd;
 	struct sockaddr_in mto;
 	string mraddr;
 	string mladdr;
@@ -75,13 +107,43 @@ private:
 	long long mwriteBytes;
 	ConnType mconnectType;
 	int  merrcode;
+
+	ikcpcb *mkcp;
+	CLock  mlockKcp;
+
+	queue<UdpMsg*>	mqueueUdpMsg;
+	CLock			mlockUdpMsg;
+
+	cms_net_ev		*mwatcherWriteIO;
+
+	//test
+	int mwriteTotalLen;
 };
 
-class TCPListener:public CConnListener
+typedef struct _UdpConnInfo{
+public:
+	cms_net_ev	*mwatcherReadIO;
+	UDPConn     *mconn;
+
+	_UdpConnInfo()
+	{
+		mwatcherReadIO = NULL;
+		mconn = NULL;
+	}
+}UdpConnInfo;
+
+
+class UDPListener:public CConnListener
 {
 public:
-	TCPListener();
-	~TCPListener();
+	UDPListener();
+	~UDPListener();
+
+	bool run();
+	void thread();
+	static void *routinue(void *param);
+	void setIO8CallBack(cms_net_ev *sockIO,cms_net_cb cb);
+	void delOneConn(UdpAddr ua);
 	//жиди
 	int  listen(char* addr,ConnType listenType);
 	void stop();
@@ -92,9 +154,25 @@ public:
 	void *oneConn();
 	void oneConnRead(void *one,Conn *conn);
 private:
+	void pushUM(UdpMsg *um);
+	bool popUM(UdpMsg **um);
+
+	cms_net_cb	mcallBack;
+	cms_net_ev *msockIO;
+
 	string  mlistenAddr;
+	int		miBindPort;
 	bool	mruning;
 	int     mfd;
 	ConnType mlistenType;
+
+	cms_thread_t mtid;
+
+	list<UDPConn *>				mlistUdpConn;
+	map<UdpAddr,UdpConnInfo*>	mmapUdpConn;
+	CLock						mlockUdpConn;
+
+	queue<UdpMsg*>	mqueueUdpMsg;
+	CLock			mlockUdpMsg;
 };
 #endif

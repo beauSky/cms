@@ -34,7 +34,8 @@ char *gstrErrno[CMS_ERRNO_NONE-CMS_ERRNO_TIMEOUT]={
 	(char *)"Incoming Alert",
 	(char *)"Failure in some part of the TLS protocol. Ex: CBC verification failure",
 	(char *)"Error internal to s2n. A precondition could have failed",
-	(char *)"User input error. Ex: Providing an invalid cipher preference version"
+	(char *)"User input error. Ex: Providing an invalid cipher preference version",
+	(char *)"User KCP protocol check fail"
 };
 
 char *cmsStrErrno(int code)

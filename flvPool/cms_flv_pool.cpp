@@ -387,17 +387,44 @@ int  CFlvPool::readRirstVideoAudioSlice(uint32 i,HASH &hash,Slice **s,bool isVid
 	return ret;
 }
 
-int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNum,bool isTrans)
+int  CFlvPool::readSlice(uint32 i, HASH &hash, int64 &llIdx, Slice **s, int &sliceNum, bool isTrans, int64 llMetaDataIdx, int64 llFirstVideoIdx, int64 llFirstAudioIdx, 
+	bool &isExist,	bool &isTaskRestart, bool isPublishTask, bool &isMetaDataChanged, bool &isFirstVideoAudioChanged, uint64 &transUid)
 {
 	*s = NULL;
 	int ret = FlvPoolCodeError;
 	mhashSliceLock[i].RLock();
 	MapHashStreamIter iterM = mmapHashSlice[i].find(hash);
 	if (iterM != mmapHashSlice[i].end())
-	{
+	{		
 		ret = FlvPoolCodeOK;
 		StreamSlice *ss = iterM->second;
 		ss->mLock.RLock();
+		
+		isExist = true;
+		//check metaData
+		isPublishTask = ss->misPushTask;
+		if (ss->misHaveMetaData && (ss->mllMetaDataIdx == llMetaDataIdx + 1 || llMetaDataIdx == -1))
+		{
+			isMetaDataChanged = true;
+		}
+		//check metaData end
+		//check first video audio changed
+		if (ss->mfirstVideoSlice)
+		{
+			if (ss->mllFirstVideoIdx == llFirstVideoIdx + 1 || llFirstVideoIdx == -1)
+			{
+				isFirstVideoAudioChanged = true;
+			}
+		}
+		if (ss->mfirstAudioSlice)
+		{
+			if (ss->mllFirstAudioIdx == llFirstAudioIdx + 1 || llFirstAudioIdx == -1)
+			{
+				isFirstVideoAudioChanged = true;
+			}
+		}
+		//check first video audio changed end
+
 		do 
 		{
 			int64 duration = 0;
@@ -415,7 +442,7 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 				if (llIdx+1 > maxIdx)
 				{
 					ret = FlvPoolCodeNoData;
-					if (llIdx > maxIdx+250)
+					if (transUid != 0 && transUid != ss->muid)
 					{
 						//任务重启过
 						logs->info(">>>>> [CFlvPool::readSlice] readSlice %s maybe has been restart.",ss->mstrUrl.c_str());
@@ -1052,7 +1079,7 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			return;
 		}
 		ss = newStreamSlice();
-
+		ss->muid = getVid();
 		ss->miNotPlayTimeout = s->miNotPlayTimeout;
 		if (ss->miNotPlayTimeout <= 0)
 		{

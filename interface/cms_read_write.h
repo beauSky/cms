@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __CMS_READ_WRITE_H__
 #define __CMS_READ_WRITE_H__
 #include <string>
+#include <net/cms_net_var.h>
 
 class CReaderWriter 
 {
@@ -41,7 +42,10 @@ public:
 	virtual int   errnos() = 0;
 	virtual int   setNodelay(int on) = 0; 
 	virtual int	  setReadBuffer(int size) = 0; 
-	virtual int	  setWriteBuffer(int size) = 0; 
+	virtual int	  setWriteBuffer(int size) = 0;
+	virtual int   flushR() = 0;
+	virtual int   flushW(uint64 uid) = 0;
+	virtual UdpAddr udpAddr() = 0;//udp สนำร
 };
 
 #endif

@@ -80,7 +80,7 @@ void CNetThread::thread()
 				cne = getReadCne(epeventsRemote[i].data.fd);
 				if (cne == NULL)
 				{
-					//maybe has been deleted just now.
+					//可能刚刚被删除了
 					continue;
 				}
 				if (cne)
@@ -95,11 +95,14 @@ void CNetThread::thread()
 				cne = getWriteCne(epeventsRemote[i].data.fd);
 				if (cne == NULL)
 				{
-					//maybe has been deleted just now.
+					//可能刚刚被删除了
 					continue;
 				}
 				if (cne)
 				{
+					char szTime[30] = { 0 };
+					getTimeStr(szTime);
+					printf(">>>>>>>>11111 %s CNetThread write event fd=%d\n", szTime, cne->mfd);
 					cne->mcallBack(cne,evs); //不能阻塞
 					atomicDec(cne); //++
 				}

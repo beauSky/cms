@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __CMS_NET_DISPATCH_H__
 #define __CMS_NET_DISPATCH_H__
 #include <interface/cms_dispatch.h>
+#include <interface/cms_conn_listener.h>
 #include <net/cms_tcp_conn.h>
 #include <net/cms_net_var.h>
 #include <core/cms_lock.h>
@@ -46,7 +47,7 @@ public:
 	void dispatchEv(cms_net_ev *watcherRead,cms_net_ev *watcherWrite,int fd,int events);
 	void dispatchEv(cms_timer *ct,int fd,int events);
 
-	void addOneListenDispatch(int fd, TCPListener *tls);
+	cms_net_ev *addOneListenDispatch(int fd, CConnListener *tls);
 	void delOneListenDispatch(int fd);
 	void dispatchAccept(cms_net_ev *watcher,int fd);
 private:
@@ -55,7 +56,11 @@ private:
 	vector<vector<CDispatch*>* > mfdDispatch;
 	CRWlock mdispatchLock;
 
-	map<int,TCPListener *> mdispatchListen;
+	//udp ¸ºÊýµÄsocket
+	vector<vector<CDispatch*>* > mfdNegDispatch;
+	CRWlock mnegDispatchLock;
+
+	map<int,CConnListener *> mdispatchListen;
 	CRWlock mdispatchListenLock;	
 };
 #endif

@@ -44,6 +44,8 @@ OneTask *newOneTask()
 	otk->maudioFramerate = 0;
 	otk->maudioSamplerate = 0;
 	otk->mmediaRate = 0;
+	otk->miWidth = 0;
+	otk->miHeight = 0;	
 
 	otk->mtotalConn = 0;		//该任务当前连接数
 
@@ -74,21 +76,24 @@ void makeOneTaskupload(HASH	&hash,int32 uploadBytes,int connAct)
 	CStatic::instance()->push((OneTaskPacket *)otu);
 }
 
-void makeOneTaskMedia(HASH	&hash,int32 videoFramerate,int32 audioFramerate,
-					  int32 audioSamplerate,int32 mediaRate,std::string videoType,
-					  std::string audioType,std::string url,std::string remoteAddr)
+void makeOneTaskMedia(HASH	&hash,int32 videoFramerate,int32 audioFramerate,int32 iWidth, int32 iHeight,
+	int32 audioSamplerate,int32 mediaRate,std::string videoType,std::string audioType,std::string url,
+	std::string remoteAddr,bool isUdp)
 {
 	OneTaskMeida *otm = new OneTaskMeida;
-	otm->packetID = PACKET_ONE_TASK_MEDA;
+	otm->packetID = PACKET_ONE_TASK_MEDIA;
 	otm->hash = hash;
 	otm->videoFramerate = videoFramerate;
 	otm->audioFramerate = audioFramerate;
 	otm->audioSamplerate = audioSamplerate;
 	otm->mediaRate = mediaRate;
+	otm->width = iWidth;
+	otm->height = iHeight;
 	otm->videoType = videoType;
 	otm->audioType = audioType;
 	otm->remoteAddr = remoteAddr;
 	otm->url = url;
+	otm->isUdp = isUdp;
 	CStatic::instance()->push((OneTaskPacket *)otm);
 }
 

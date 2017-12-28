@@ -62,3 +62,12 @@ void initCmsNetEv(cms_net_ev *cne,cms_net_cb callback,int fd,int event)
 	cne->mfd = fd;
 	cne->mwatchEvent = event;
 }
+
+bool isUdpAddrEmpty(UdpAddr ua)
+{
+	if (ua.miBindPort == 0 && ua.miPort == 0 && ua.muiAddr == 0 && ua.mlistener == NULL)
+	{
+		return true;
+	}
+	return false;
+}

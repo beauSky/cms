@@ -35,6 +35,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stdlib.h>
 #include <errno.h>
 #include <netinet/tcp.h>
+#include <string>
 
 
 TCPConn::TCPConn(int fd)
@@ -97,19 +98,19 @@ TCPConn::~TCPConn()
 
 int   TCPConn::dialTcp(char *addr,ConnType connectType)
 {
+	std::string sAddr;
+	sAddr.append(addr);
 	mconnectType = connectType;	
-
+	std::string strHost;
 	unsigned short port;
-	char *host,*pos;	
-	pos = (char*)strchr(addr,':');
-	if (pos == NULL)
+	size_t pos = sAddr.find(":");
+	if (pos == std::string::npos)
 	{
 		logs->error("*** TCPConn dialTcp addr %s is illegal *****",addr);
 		return CMS_ERROR;
 	}
-	host = (char*)addr;
-	*pos++ = '\0';
-	port = (unsigned short)atoi(pos);
+	strHost = sAddr.substr(0,pos);
+	port = (unsigned short)atoi(sAddr.substr(pos+1).c_str());
 	mfd = socket(AF_INET,SOCK_STREAM,0);
 	if (mfd == CMS_INVALID_SOCK)
 	{
@@ -120,7 +121,7 @@ int   TCPConn::dialTcp(char *addr,ConnType connectType)
 	mto.sin_family = AF_INET;
 	mto.sin_port = htons(port);
 	unsigned long ip;
-	if (!CDnsCache::instance()->host2ip(host,ip))
+	if (!CDnsCache::instance()->host2ip(strHost.c_str(),ip))
 	{
 		logs->error("*** TCPConn dialTcp dns cache error *****");
 		::close(mfd);
@@ -296,6 +297,22 @@ int TCPConn::fd()
 	return mfd;
 }
 
+int TCPConn::flushR()
+{
+	//tcp 不需要实现
+	return CMS_OK;
+}
+
+int TCPConn::flushW(uint64 uid)
+{
+	//tcp 不需要实现
+	return CMS_OK;
+}
+
+UdpAddr TCPConn::udpAddr()
+{
+	return mua;
+}
 
 TCPListener::TCPListener()
 {
@@ -303,34 +320,39 @@ TCPListener::TCPListener()
 	mfd = -1;
 }
 
+TCPListener::~TCPListener()
+{
+
+}
+
 int  TCPListener::listen(char* addr,ConnType listenType)
 {
+	std::string sAddr;
+	sAddr.append(addr);
 	mlistenAddr = addr;
 	struct sockaddr_in serv_addr;
-	int n;
+	std::string strHost;
 	unsigned short port;
-	char *host,*pos;
-	logs->info("##### TCPListener listen addr %s #####",addr);
-	pos = (char*)strchr(addr,':');
-	if (pos == NULL)
+	size_t pos = sAddr.find(":");
+	if (pos == std::string::npos)
 	{
-		logs->error("*** TCPListener listen addr %s is illegal *****",addr);
+		logs->error("*** TCPConn dialTcp addr %s is illegal *****",addr);
 		return CMS_ERROR;
 	}
-	host = (char*)addr;
-	*pos++ = '\0';
-	if (strlen(host) == 0)
+	strHost = sAddr.substr(0,pos);
+	port = (unsigned short)atoi(sAddr.substr(pos+1).c_str());
+	logs->info("##### TCPListener listen addr %s #####",addr);
+	if (strHost.length() == 0)
 	{
-		host = (char *)"0.0.0.0";
+		strHost = "0.0.0.0";
 	}
-	port = (unsigned short)atoi(pos);
 	mfd = socket(AF_INET,SOCK_STREAM,0);
 	if (mfd == CMS_INVALID_SOCK)
 	{
 		logs->error("*** TCPListener listen create socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
 		return CMS_ERROR;
 	}
-	n = 1;
+	int n = 1;
 	if (setsockopt(mfd, SOL_SOCKET, SO_REUSEADDR, (char *)&n, sizeof(n)) < 0)
 	{
 		logs->error("*** TCPListener listen set SO_REUSEADDR fail,errno=%d,errstr=%s *****",errno,strerror(errno));
@@ -340,7 +362,7 @@ int  TCPListener::listen(char* addr,ConnType listenType)
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);
 	unsigned long ip;
-	if (!CDnsCache::instance()->host2ip(host,ip))
+	if (!CDnsCache::instance()->host2ip(strHost.c_str(),ip))
 	{
 		logs->error("*** TCPListener listen dns cache error *****");
 		::close(mfd);
@@ -384,6 +406,21 @@ ConnType TCPListener::listenType()
 	return mlistenType;
 }
 
+bool TCPListener::isTcp()
+{
+	return true;
+}
+
+void *TCPListener::oneConn()
+{
+	return NULL;
+}
+
+void TCPListener::oneConnRead(void *one,Conn *conn)
+{
+
+}
+
 void TCPListener::stop()
 {
 	logs->info("### TCPListener begin stop listening %s ###",mlistenAddr.c_str());
@@ -404,7 +441,10 @@ int  TCPListener::accept()
 	fromlen = sizeof(from);
 	cnfd = ::accept(mfd, (struct sockaddr *)&from, &fromlen);
 	if (cnfd == -1) {
-		logs->error("*** TCPListener can't accept connection err=%d,strerr=%s ***",errno,strerror(errno));
+		if (errno != EAGAIN)
+		{
+			logs->error("*** TCPListener can't accept connection err=%d,strerr=%s ***",errno,strerror(errno));
+		}		
 		return CMS_ERROR;
 	}
 	return cnfd;

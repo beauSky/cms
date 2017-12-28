@@ -26,6 +26,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_COMMON_VAR_H__
 #include <string.h>
 
+enum ConnType
+{
+	TypeNetNone,
+	TypeHttp,
+	TypeHttps,
+	TypeRtmp,
+	TypeQuery
+};
+
 typedef long long			int64;
 typedef unsigned long long	uint64;
 typedef int					int32;
