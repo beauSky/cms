@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -44,6 +44,7 @@ typedef struct _TsChunkArray
 {
 	int mchunkSize;
 	int msliceSize;
+	int mexSliceSize; //被追加的长度
 	std::vector<TsChunk *> mtsChunkArray;
 }TsChunkArray;
 
@@ -51,8 +52,8 @@ TsChunkArray *allocTsChunkArray(int chunkSize);
 void freeTsChunkArray(TsChunkArray *tca);
 
 //writeChunk一次只能写满一个ts 如果需要拆分则需要多次调用 返回值 1 表示写满了一片 否则没写完
-int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,char ch,int &writeLen);
-int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,char *data,int len,int &writeLen);
+int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,TsChunkArray *lastTca,char ch,int &writeLen);
+int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,TsChunkArray *lastTca,char *data,int len,int &writeLen);
 int beginChunk(TsChunkArray *tca);
 int endChunk(TsChunkArray *tca);
 int getChunk(TsChunkArray *tca,int i,TsChunk **tc);

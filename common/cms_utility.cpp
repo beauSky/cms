@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -28,6 +28,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <enc/cms_sha1.h>
 #include <enc/cms_base64.h>
 #include <log/cms_log.h>
+#include <common/cms_time.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -293,15 +294,19 @@ unsigned long long htonll(unsigned long long val)
 }
 
 unsigned long getTickCount(){
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsMilSecond();
+#else
 	int res;
 	struct timespec sNow;
 	res = clock_gettime(CLOCK_MONOTONIC, &sNow);
-	if(res != 0)
+	if (res != 0)
 	{
 		printf("clock_gettime error: %d", errno);
 		return -1;
 	}
 	return sNow.tv_sec * 1000 + sNow.tv_nsec / 1000000; /* milliseconds */
+#endif	
 }
 
 /* return time string */
@@ -315,14 +320,22 @@ int getTimeStr(char *dstBuf)
 		st.wMinute, st.wSecond, st.wMilliseconds);
 	return st.wDay;
 #else /* posix */
+#ifdef _CMS_APP_USE_TIME_
+	char *ptr = getCmsTimeStr();
+	int day = getCmsDay();
+	memcpy(dstBuf, ptr, strlen(ptr));
+	sprintf(dstBuf+strlen(dstBuf), ".%03llu ", getCmsMilSecond() % 1000);
+	return day;
+#else
 	time_t t;
 	struct tm st;
 	t = time(NULL);
 	localtime_r(&t, &st);
-	sprintf(dstBuf," %04d-%02d-%02d %02d:%02d:%02d.%03llu ",
+	sprintf(dstBuf, " %04d-%02d-%02d %02d:%02d:%02d.%03llu ",
 		st.tm_year + 1900, st.tm_mon + 1, st.tm_wday, st.tm_hour,
-		st.tm_min, st.tm_sec, getMilSeconds()%1000);
+		st.tm_min, st.tm_sec, getMilSeconds() % 1000);
 	return st.tm_wday;
+#endif	
 #endif /* posix end */
 }
 
@@ -346,10 +359,14 @@ unsigned long long getMilSeconds()
 	tv.tv_sec = clock;
 	tv.tv_usec = wtm.wMilliseconds * 1000;
 	return ((unsigned long long)tv.tv_sec * 1000 + (unsigned long long)tv.tv_usec / 1000);
-#else  
+#else 
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsMilSecond();
+#else
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	return ((unsigned long long)tv.tv_sec * 1000 + (unsigned long long)tv.tv_usec / 1000);
+#endif	
 #endif  
 }
 
@@ -362,13 +379,16 @@ long long getTimeUnix()
 	 */
 	return GetTickCount(); /* milliseconds */
 #else /* posix */
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsUnixTime();
+#else
 	/*int res;
 	struct timespec sNow;
 	res = clock_gettime(CLOCK_MONOTONIC, &sNow);
 	if(res != 0)
 	{
-		// error 
-		return 0;
+	// error
+	return 0;
 	}
 	long long uptime = sNow.tv_sec;
 	uptime = uptime*1000;
@@ -376,6 +396,7 @@ long long getTimeUnix()
 	return uptime; */
 	long long tt = (long long)time(NULL);
 	return tt;
+#endif		
 #endif /* posix end */
 }
 
@@ -388,21 +409,38 @@ long long getNsTime()
 
 int getTimeDay()
 {
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsDay();
+#else
 	time_t t;
 	struct tm st;
 	t = time(NULL);
 	localtime_r(&t, &st);
 	return st.tm_wday;
+#endif	
 }
 
 void getDateTime(char* szDTime)
 {
+#ifdef _CMS_APP_USE_TIME_
+	char *ptr = getCmsDayTime();
+	memcpy(szDTime, ptr, strlen(ptr));
+#else
 	time_t t;
 	struct tm st;
 	t = time(NULL);
 	localtime_r(&t, &st);
-	sprintf(szDTime,"%04d-%02d-%02d",
-		st.tm_year+1900,st.tm_mon+1, st.tm_mday);
+	sprintf(szDTime, "%04d-%02d-%02d",
+		st.tm_year + 1900, st.tm_mon + 1, st.tm_mday);
+#endif
+}
+
+void waitTime(int n)
+{
+	struct timeval delay;
+	delay.tv_sec = 0;
+	delay.tv_usec = n * 1000; // n ms
+	select(0, NULL, NULL, NULL, &delay);
 }
 
 int cmsMkdir(const char *dirname)

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -49,6 +49,7 @@ TsChunkArray *allocTsChunkArray(int chunkSize)
 	TsChunkArray *tca = new TsChunkArray;
 	tca->mchunkSize = chunkSize;
 	tca->msliceSize = 0;
+	tca->mexSliceSize = 0;
 	return tca;
 }
 
@@ -62,16 +63,33 @@ void freeTsChunkArray(TsChunkArray *tca)
 	}
 }
 
-int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,char ch,int &writeLen)
+int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,TsChunkArray *lastTca,char ch,int &writeLen)
 {
-	return writeChunk(tsHeader,headerLen,tca,&ch,1,writeLen);
+	return writeChunk(tsHeader,headerLen,tca,lastTca,&ch,1,writeLen);
 }
 
-int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,char *data,int len,int &writeLen)
+int writeChunk(char *tsHeader,int headerLen,TsChunkArray *tca,TsChunkArray *lastTca,char *data,int len,int &writeLen)
 {
 	int left = 0;
 	TsChunk *tc;
 	tc = NULL;
+// 	if (lastTca != NULL && !lastTca->mtsChunkArray.empty())
+// 	{
+// 		tc = lastTca->mtsChunkArray.at(lastTca->mtsChunkArray.size()-1);
+// 		if (tc->muse < lastTca->mchunkSize)
+// 		{
+// 			left = TS_CHUNK_SIZE-(tc->muse%TS_CHUNK_SIZE);
+// 			left = cmsMin(left,len);
+// 			memcpy(tc->mdata+tc->muse,data,left);
+// 			tc->muse += left;
+// 			writeLen = left;
+// 			lastTca->msliceSize += writeLen;
+// 			lastTca->mexSliceSize += writeLen;
+// 			assert(tc->muse <= lastTca->mchunkSize);
+// 			return (tc->muse%TS_CHUNK_SIZE) == 0 ? 1 : 0;
+// 		}
+// 	}
+// 	tc = NULL;
 	if (tca->mtsChunkArray.empty())
 	{
 		tc = allocTsChunk(tca->mchunkSize);

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -61,7 +61,7 @@ public:
 	int	  setReadBuffer(int size);
 	int	  setWriteBuffer(int size);
 	int   flushR();
-	int   flushW(uint64 uid);
+	int   flushW();
 	UdpAddr udpAddr();
 private:
 	UdpAddr mua;
@@ -90,7 +90,6 @@ public:
 	ConnType listenType();
 	bool isTcp();
 	void *oneConn();
-	void oneConnRead(void *one,Conn *conn);
 private:
 	string  mlistenAddr;
 	bool	mruning;

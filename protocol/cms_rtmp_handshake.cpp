@@ -48,6 +48,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/time.h>
 #include <protocol/cms_rtmp_handshake.h>
 #include <core/cms_lock.h>
 #include "log/cms_log.h"
@@ -76,6 +77,10 @@ unsigned char SrsGenuineFPKey[] = {
 	0x6E, 0xEC, 0x5D, 0x2D, 0x29, 0x80, 0x6F, 0xAB,
 	0x93, 0xB8, 0xE6, 0x36, 0xCF, 0xEB, 0x31, 0xAE
 }; // 62
+
+#define cms_rtmp_server_version  0x0D0E0A0D
+#define cms_rtmp_client_version  0x0C000D0E
+
 
 CLock g_rtmpHandShakeLock;
 
@@ -528,6 +533,14 @@ bool srs_bytes_equals(void* pa, void* pb, int size){
 }
 
 
+long get_rtmp_time()
+{
+	struct	timeval		tv;
+	gettimeofday(&tv, NULL);
+	return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+
 
 c2s2::c2s2()
 {
@@ -625,10 +638,8 @@ int c1s1::c1_create(srs_schema_type _schema)
 		return ret;
 	}
 	destroy_blocks();
-	time = ::time(NULL);
-	//time = htonl(time);
-	//version = 34013312;//0x027c0080; // client c1 version
-	version = 0x027c0080; // client c1 version
+	time = htonl(get_rtmp_time());
+	version = htonl(cms_rtmp_client_version);//0x027c0080; // client c1 version
 	if (_schema == srs_schema0) {
 		srs_key_block_init(&block0.key);
 		srs_digest_block_init(&block1.digest);
@@ -722,9 +733,8 @@ int c1s1::s1_create(c1s1* c1)
 	}
 	destroy_blocks();
 	schema = c1->schema;
-	time = ::time(NULL);
-	//time = htonl(time);
-	version = 0x01000504; // server s1 version
+	time = htonl(get_rtmp_time());
+	version = htonl(cms_rtmp_server_version);//0x01000504; // server s1 version
 	if (schema == srs_schema0) {
 		srs_key_block_init(&block0.key);
 		srs_digest_block_init(&block1.digest);

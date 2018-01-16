@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -46,7 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifdef WIN32 /* WIN32 */
 #include <windows.h>
-#define cmsSleep(e) Sleep(e)
+#define cmsSleep(e) waitTime(e)
 #else /* posix */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -55,7 +55,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define _atoi64(val) strtoll(val, NULL, 10)
 #define str2float(val) strtod(val,NULL)
 #define hex2int64(val) strtoll(val, NULL, 16)
-#define cmsSleep(e) usleep(e*1000)
+#define cmsSleep(e) waitTime(e)
 #endif /* posix end */
 
 unsigned int hash2Idx(HASH &hash);
@@ -81,6 +81,7 @@ void getDateTime(char* szDTime);
 long long getTimeUnix();
 long long getNsTime();
 int getTimeDay();
+void waitTime(int n);
 int cmsMkdir(const char *dirname);
 bool isLegalIp(const char * const szIp);
 unsigned long ipStr2ipInt(const char* szIP);

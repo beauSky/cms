@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -83,6 +83,10 @@ int cmsCreateThread(cms_thread_t *tid, cms_routine_pt routine, void *arg,bool de
 
 int cmsWaitForThread(cms_thread_t tid, void **value_ptr)
 {
+	if (tid == 0)
+	{
+		return 0;
+	}
 	int res;
 
 #ifdef WIN32

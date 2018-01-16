@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,6 +35,9 @@ char *gstrErrno[CMS_ERRNO_NONE-CMS_ERRNO_TIMEOUT]={
 	(char *)"Failure in some part of the TLS protocol. Ex: CBC verification failure",
 	(char *)"Error internal to s2n. A precondition could have failed",
 	(char *)"User input error. Ex: Providing an invalid cipher preference version",
+	(char *)"Connection is reset by peer",
+	(char *)"Use a closed conn",
+	(char *)"Connection has been EOF",
 	(char *)"User KCP protocol check fail"
 };
 

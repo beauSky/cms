@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -183,7 +183,7 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			}
 			mprotocol->setWriteBuffer(sendBufSize);
 			//设置网络层发送缓冲 结束
-			mfirstPlay->init(mreadHash,mreadHashIdx,mprotocol->remoteAddr(),"flv",mprotocol->getUrl());
+			mfirstPlay->init(mreadHash,mreadHashIdx,mprotocol->remoteAddr(), mprotocol->protocol(),mprotocol->getUrl());
 		}
 		if (!misPushTask && !mfirstPlay->checkfirstPlay())
 		{
@@ -195,34 +195,37 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 		flvPoolCode = CFlvPool::instance()->readSlice(mreadHashIdx,mreadHash,mllTransIdx,&s,sliceNum, isTransPlay, 
 			mllMetaDataIdx, mllFirstVideoIdx, mllFirstAudioIdx,isExist, isTaskRestart, isPublishTask, isMetaDataChanged, isFirstVideoAudioChanged, mullTransUid);
 
+		if (!isExist)
+		{
+			ret = 2;
+			atomicDec(s);
+			if ((misPushTask || mprotocol->isCmsConnection()) && mllTransIdx != -1)
+			{
+				ret = -1;
+				logs->error("*** %s [CFlvTransmission::doTransmission] %s doTransmission task is missing ***",
+					mprotocol->remoteAddr().c_str(), mprotocol->getUrl().c_str());
+			}
+			break;
+		}
+
 		if (misPushTask && !isPublishTask)
 		{
 			//只有推流任务才能转推
-			if (s != NULL)
-			{
-				atomicDec(s);
-			}
+			atomicDec(s);
 			ret = -1;
 			logs->error("*** %s [CFlvTransmission::doTransmission] %s doTransmission is pushing task but read task is not publish task ***",
 				mprotocol->remoteAddr().c_str(), mprotocol->getUrl().c_str());
 			break;
 		}
 
-		if (!isExist)
-		{
-			ret = 2;
-			if (s != NULL)
-			{
-				atomicDec(s);
-			}
-			break;
-		}
-
 		if (flvPoolCode == FlvPoolCodeError)
 		{
-			logs->error("*** %s [CFlvTransmission::doTransmission] %s doTransmission task is missing ***",
-				mprotocol->remoteAddr().c_str(),mprotocol->getUrl().c_str());
-			ret = -1;
+			if ((misPushTask || mprotocol->isCmsConnection()) && mllTransIdx != -1)
+			{
+				logs->error("*** %s [CFlvTransmission::doTransmission] %s doTransmission task is missing ***",
+					mprotocol->remoteAddr().c_str(), mprotocol->getUrl().c_str());
+				ret = -1;
+			}			
 			break;
 		}
 		else if (flvPoolCode == FlvPoolCodeOK)
@@ -232,10 +235,7 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			{
 				if (doMetaData() == CMS_ERROR)
 				{
-					if (s != NULL)
-					{
-						atomicDec(s);
-					}
+					atomicDec(s);
 					ret = -1;
 					break;
 				}				
@@ -247,10 +247,7 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 				{
 					if (doFirstVideoAudio(true) == CMS_ERROR)
 					{
-						if (s != NULL)
-						{
-							atomicDec(s);
-						}
+						atomicDec(s);
 						ret = -1;
 						break;
 					}
@@ -259,10 +256,7 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 				{
 					if (doFirstVideoAudio(false) == CMS_ERROR)
 					{
-						if (s != NULL)
-						{
-							atomicDec(s);
-						}
+						atomicDec(s);
 						ret = -1;
 						break;
 					}
@@ -272,31 +266,25 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 			if (mllTransIdx == -1  && mllFirstVideoIdx != -1 && s->mllIndex < mllFirstVideoIdx)
 			{
 				mllTransIdx = mllFirstVideoIdx<mllFirstAudioIdx ? mllFirstVideoIdx-1:mllFirstAudioIdx-1;
-				if (s != NULL)
-				{
-					atomicDec(s);
-				}
+				atomicDec(s);
 				continue;
 			}
 			if (mllTransIdx == -1 && mllFirstAudioIdx != -1 && s->mllIndex < mllFirstAudioIdx)
 			{
 				mllTransIdx = mllFirstVideoIdx<mllFirstAudioIdx ? mllFirstVideoIdx-1:mllFirstAudioIdx-1;
-				if (s != NULL)
-				{
-					atomicDec(s);
-				}
+				atomicDec(s);
 				continue;
 			}
 			//如果首帧改变 刚连上来的用户有可能发送的是旧的数据帧 花屏 结束
 			if (!mfastBitRate->isInit())
 			{
-				mfastBitRate->init(mprotocol->remoteAddr(),"flv",mprotocol->getUrl(),misWaterMark,
+				mfastBitRate->init(mprotocol->remoteAddr(), mprotocol->protocol(),mprotocol->getUrl(),misWaterMark,
 					mwaterMarkOriHashIdx,mreadHashIdx,mwaterMarkOriHash,mreadHash);
 				mfastBitRate->setChangeBitRate();
 			}
 			if (!mdurationtt->isInit())
 			{
-				mdurationtt->init(mprotocol->remoteAddr(),"flv",mprotocol->getUrl());
+				mdurationtt->init(mprotocol->remoteAddr(), mprotocol->protocol(),mprotocol->getUrl());
 				mdurationtt->setResetTimestamp(true);
 			}
 			if (s)
@@ -306,10 +294,7 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 				if (!misPushTask && !mfirstPlay->checkShouldDropFrameCount(mllTransIdx,s))
 				{
 					ret = 0;
-					if (s != NULL)
-					{
-						atomicDec(s);
-					}
+					atomicDec(s);
 					continue;
 				}
 				needSend = !mfirstPlay->needDropFrame(s);
@@ -398,9 +383,9 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 				}
 				if (isVideo)
 				{
-					if (mfastBitRate->getTransCodeNeedDropVideo())
+					if (mfastBitRate->getTransCodeNeedDropVideo())//是否需要丢帧
 					{
-						if (s->misKeyFrame && mfastBitRate->isDropEnoughTime(uiTimestamp))
+						if (s->misKeyFrame && mfastBitRate->isDropEnoughTime(uiTimestamp))//判断是否满足条件 重设丢帧标志
 						{
 							if (mfastBitRate->getLoseBufferTimes() <= 0)
 							{
@@ -413,7 +398,7 @@ int CFlvTransmission::doTransmission(bool &isSendData)
 							mfastBitRate->dropOneFrame();
 						}
 					}
-					if (mfastBitRate->getTransCodeNoNeedDropVideo())
+					if (mfastBitRate->getTransCodeNoNeedDropVideo())//动态码率 模拟丢帧逻辑 实际不丢帧
 					{
 						if (s->misKeyFrame)
 						{

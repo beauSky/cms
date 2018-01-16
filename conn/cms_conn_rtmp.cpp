@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -115,7 +115,7 @@ CConnRtmp::~CConnRtmp()
 		if (isUdpAddrEmpty(mrw->udpAddr()) || (!isUdpAddrEmpty(mrw->udpAddr()) && mrw->fd() > 0))//udp 不调用
 		{
 			CNetMgr::instance()->cneStop(mwatcherReadIO);
-		}		
+		}
 		freeCmsNetEv(mwatcherReadIO);
 		logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop read io ",
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
@@ -139,7 +139,11 @@ CConnRtmp::~CConnRtmp()
 		delete mflvPump;
 	}
 	mrw->close();
-	delete mrw;
+	if (isUdpAddrEmpty(mrw->udpAddr()) )//udp 不调用
+	{
+		//udp 连接由udp模块自身管理 不需要也不能由外部释放
+		delete mrw;
+	}
 }
 
 int CConnRtmp::doit()
@@ -271,48 +275,24 @@ int CConnRtmp::doRead(bool isTimeout)
 	if (isTimeout)
 	{
 		int64 tn = getTimeUnix();
-		if (tn - mtimeoutTick > 30)
+		if (tn - mtimeoutTick > 10)
 		{
 			logs->error("%s [CConnRtmp::doRead] %s rtmp %s is timeout ***",
 				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 			return CMS_ERROR;
 		}
-	}
-
-	char szTime[30] = { 0 };
-	getTimeStr(szTime);
-	unsigned long t1 = getTickCount();
-	printf("================11111 %s CConnRtmp::doRead fd=%d  enter is timeout: %s \n", szTime, mrw->fd(), isTimeout ? "true" : "false");
+	}	
 
 	int ret = mrtmp->want2Read(isTimeout);
 
-	unsigned long t2 = getTickCount();
-	if (t2 - t1 > 1)
-	{
-		printf("================11111 %s CConnRtmp::doRead fd=%d  is timeout: %s take time: %u\n", szTime, mrw->fd(), isTimeout ? "true" : "false", t2 - t1);
-	}
-	printf("================11111 %s CConnRtmp::doRead fd=%d  leave\n", szTime, mrw->fd());
 	return ret;
 }
 
 int CConnRtmp::doWrite(bool isTimeout)
 {
-	//logs->debug("%s [CConnRtmp::doWrite] rtmp %s doWrite",
-	//	mremoteAddr.c_str(),mrtmp->getRtmpType().c_str());
-	char szTime[30] = { 0 };
-	getTimeStr(szTime);
-	unsigned long t1 = getTickCount();
-	printf("================11111 %s CConnRtmp::doWrite fd=%d  enter is timeout: %s \n", szTime, mrw->fd(), isTimeout ? "true" : "false");
-	
 	mjustTick++;
 	int ret = mrtmp->want2Write(isTimeout);
-	mjustTick--;
-	unsigned long t2 = getTickCount();
-	if (t2-t1 > 1)
-	{
-		printf("================11111 %s CConnRtmp::doWrite fd=%d  is timeout: %s take time: %u\n", szTime,mrw->fd(), isTimeout ? "true" : "false",t2-t1);
-	}
-	printf("================11111 %s CConnRtmp::doWrite fd=%d  leave\n", szTime, mrw->fd());
+	mjustTick--;	
 	return ret;
 }
 
@@ -361,10 +341,10 @@ cms_net_ev *CConnRtmp::evWriteIO(cms_net_ev *ev)
 			//自定义的socket 不创建
 			atomicInc(ev);		//计数器加1
 			mwatcherWriteIO = ev;
-			if (!isUdpAddrEmpty(mrw->udpAddr()))
-			{
-				writeEV(mwatcherWriteIO,EventWrite); //对于udp首次需要投递写事件,理论上不会进来
-			}
+			//if (!isUdpAddrEmpty(mrw->udpAddr()))
+			//{
+			//	writeEV(mwatcherWriteIO,EventWrite); //对于udp首次需要投递写事件,理论上不会进来
+			//}
 		}
 		else
 		{			

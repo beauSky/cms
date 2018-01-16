@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -37,6 +37,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 CConnMgr::CConnMgr(int i)
 {
 	mthreadIdx = i;
+	mtid = 0;
 }
 
 CConnMgr::~CConnMgr()
@@ -77,23 +78,13 @@ void CConnMgr::delOneConn(int fd)
 	mfdConnLock.UnWLock();
 	if (conn)
 	{
-		CReaderWriter *crw = conn->rwConn(); //获取udp
-		UdpAddr ua = crw->udpAddr(); //获取udp对端peer
-		if (!isUdpAddrEmpty(ua))
-		{
-			UDPListener *uls = (UDPListener *)ua.mlistener; //获取对应的udp listener
-			if (uls != NULL)
-			{
-				uls->delOneConn(ua);//从 listener 删除
-			}
-		}
 		delete conn;
 	}
 }
 
 //TEST
 std::map<unsigned long,unsigned long> gmapCSendTakeTime;
-int64 gCSendTakeTimeTT = getTimeUnix();
+int64 gCSendTakeTimeTT;
 CLock gCSendTakeTime;
 //TEST end
 
@@ -202,8 +193,11 @@ bool CConnMgr::run()
 
 void CConnMgr::stop()
 {
+	logs->debug("##### CConnMgr::stop begin #####");
 	misRun = false;
 	cmsWaitForThread(mtid,NULL);
+	mtid = 0;
+	logs->debug("##### CConnMgr::stop finish #####");
 }
 
 void *CConnMgr::routinue(void *param)
@@ -257,6 +251,7 @@ CConnMgrInterface *CConnMgrInterface::minstance = NULL;
 CConnMgrInterface::CConnMgrInterface()
 {
 	misRun = false;
+	mtid = 0;
 	int num = sysconf(_SC_NPROCESSORS_CONF);
 	logs->debug("######## system has %d processor(s) #########", num);
 	if (num < NUM_OF_THE_CONN_MGR)
@@ -272,12 +267,7 @@ CConnMgrInterface::CConnMgrInterface()
 
 CConnMgrInterface::~CConnMgrInterface()
 {
-	for (int i =0; i < NUM_OF_THE_CONN_MGR;i ++)
-	{
-		mconnMgrArray[i]->stop();
-		delete mconnMgrArray[i];
-		mconnMgrArray[i] = NULL;
-	}
+	
 }
 
 CConnMgrInterface *CConnMgrInterface::instance()
@@ -395,9 +385,8 @@ Conn *CConnMgrInterface::createConn(HASH &hash,char *addr,string pullUrl,std::st
 			if (rtmp->doit() != CMS_ERROR)
 			{
 				CConnMgrInterface::instance()->addOneConn(udp->fd(),rtmp);
-
-				rtmp->evReadIO();
-				rtmp->evWriteIO();
+				rtmp->evWriteIO(udp->evWriteIO());
+				rtmp->evReadIO(udp->evReadIO());
 				conn = rtmp;
 				if (udp->connect() == CMS_ERROR)
 				{
@@ -430,8 +419,12 @@ void CConnMgrInterface::thread()
 
 bool CConnMgrInterface::run()
 {	
+	if (gCSendTakeTimeTT == 0)
+	{
+		gCSendTakeTimeTT = getTimeUnix();
+	}
 	misRun = true;
-	int res = cmsCreateThread(&mtid,routinue,this,true);
+	int res = cmsCreateThread(&mtid,routinue,this,false);
 	if (res == -1)
 	{
 		char date[128] = {0};
@@ -440,4 +433,19 @@ bool CConnMgrInterface::run()
 		return false;
 	}
 	return true;
+}
+
+void CConnMgrInterface::stop()
+{
+	logs->debug("##### CConnMgrInterface::stop begin #####");
+	misRun = false;
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
+	for (int i = 0; i < NUM_OF_THE_CONN_MGR; i++)
+	{
+		mconnMgrArray[i]->stop();
+		delete mconnMgrArray[i];
+		mconnMgrArray[i] = NULL;
+	}
+	logs->debug("##### CConnMgrInterface::stop finish #####");
 }

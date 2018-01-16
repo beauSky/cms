@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -44,7 +44,7 @@ public:
 	virtual int	  setReadBuffer(int size) = 0; 
 	virtual int	  setWriteBuffer(int size) = 0;
 	virtual int   flushR() = 0;
-	virtual int   flushW(uint64 uid) = 0;
+	virtual int   flushW() = 0;
 	virtual UdpAddr udpAddr() = 0;//udp 使用
 };
 

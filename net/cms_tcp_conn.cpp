@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -303,7 +303,7 @@ int TCPConn::flushR()
 	return CMS_OK;
 }
 
-int TCPConn::flushW(uint64 uid)
+int TCPConn::flushW()
 {
 	//tcp 不需要实现
 	return CMS_OK;
@@ -414,11 +414,6 @@ bool TCPListener::isTcp()
 void *TCPListener::oneConn()
 {
 	return NULL;
-}
-
-void TCPListener::oneConnRead(void *one,Conn *conn)
-{
-
 }
 
 void TCPListener::stop()

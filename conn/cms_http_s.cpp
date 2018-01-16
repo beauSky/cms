@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -123,7 +123,11 @@ CHttpServer::~CHttpServer()
 		delete mbinaryWriter;
 	}
 	mrw->close();
-	delete mrw;
+	if (isUdpAddrEmpty(mrw->udpAddr()))//udp 不调用
+	{
+		//udp 连接由udp模块自身管理 不需要也不能由外部释放
+		delete mrw;
+	}
 }
 
 void CHttpServer::reset()

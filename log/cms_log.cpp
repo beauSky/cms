@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -42,6 +42,11 @@ void cmsLogInit(string dir,LogLevel level,bool console,int limitSize)
 		dir = "./log/";
 	}
 	cmsLog->run(dir,level,console,limitSize);
+}
+
+void cmsLogStop()
+{
+	cmsLog->stop();
 }
 
 int _vscprintf (const char * format, va_list pargs)
@@ -103,6 +108,7 @@ CLog::CLog()
 	mfiseSize = 0;
 	mlimitSize = 1024*1024*500;
 	midx = 0;
+	mtid = 0;
 }
 
 void *CLog::routinue(void *param)
@@ -208,7 +214,7 @@ bool CLog::run(string dir,LogLevel level,bool console,int limitSize)
 	}
 	mdir = dir;
 	misRun = true;
-	int res = cmsCreateThread(&mtid,routinue,this,true);
+	int res = cmsCreateThread(&mtid,routinue,this,false);
 	if (res == -1)
 	{
 		char date[128] = {0};
@@ -217,6 +223,15 @@ bool CLog::run(string dir,LogLevel level,bool console,int limitSize)
 		return false;
 	}
 	return true;
+}
+
+void CLog::stop()
+{
+	logs->debug("##### CLog::stop begin #####");
+	misRun = false;
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
+	logs->debug("##### CLog::stop finish #####");
 }
 
 void CLog::push(LogInfo* logInfo)

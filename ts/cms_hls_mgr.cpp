@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -33,7 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 //TEST
 std::map<unsigned long,unsigned long> gmapSendTakeTime;
-int64 gSendTakeTimeTT = getTimeUnix();
+int64 gSendTakeTimeTT;
 CLock gSendTakeTime;
 //TEST end
 
@@ -72,7 +72,7 @@ void atomicDec(SSlice *s)
 	if (__sync_sub_and_fetch(&s->mionly,1) == 0)//当数据超时，且没人使用时，删除
 	{
 		TsChunkArray *tca = NULL;
-		TsChunk *tc = NULL;
+		//TsChunk *tc = NULL;
 		std::vector<TsChunkArray *>::iterator itTca = s->marray.begin();
 		for (; itTca != s->marray.end();)
 		{
@@ -131,6 +131,8 @@ CMission::CMission(HASH &hash,uint32 hashIdx,std::string url,
 	mFVFlag = false;	//是否读到首帧视频(SPS/PPS)
 	mbTime = 0;			//最后一个切片的生成时间
 	mMux = new CSMux(); //转码器
+	mlastTca = NULL;
+	mullTransUid = 0;
 
 	mdurationtt = new CDurationTimestamp();
 }
@@ -148,10 +150,7 @@ CMission::~CMission()
 	std::vector<SSlice *>::iterator it = msliceList.begin();
 	for (;it != msliceList.end();)
 	{
-		if (*it != NULL)
-		{
-			atomicDec(*it);
-		}
+		atomicDec(*it);
 		it = msliceList.erase(it);
 	}
 	freeCmsTimer(mreadTimer);
@@ -214,26 +213,33 @@ int  CMission::doit(cms_timer *t)
 	int	sliceNum = 0;
 	bool isVideo = false;
 	bool isAudio = false;
+	bool isTransPlay = false;
+	bool isExist = false;
+	bool isPublishTask = false;
+	bool isTaskRestart = false;
+	bool isMetaDataChanged = false;
+	bool isFirstVideoAudioChanged = false;
+	int64 llMetaDataIdx = -1;
 	do 
 	{
-		if (CFlvPool::instance()->isFirstVideoChange(mhashIdx,mhash,mreadFVIndex))
-		{
-			if (doFirstVideoAudio(true) == CMS_ERROR)
-			{
-				ret = -1;
-				break;
-			}
-		}
-		if (CFlvPool::instance()->isFirstAudioChange(mhashIdx,mhash,mreadFAIndex))
-		{
-			if (doFirstVideoAudio(false) == CMS_ERROR)
-			{
-				ret = -1;
-				break;
-			}
-		}
+		isTransPlay = false;
+		isExist = false;
+		isPublishTask = false;
+		isTaskRestart = false;
+		isMetaDataChanged = false;
+		isFirstVideoAudioChanged = false;
+		
 		sliceNum = 0;
-		flvPoolCode = CFlvPool::instance()->readSlice(mhashIdx,mhash,mreadIndex,&s,sliceNum);
+		flvPoolCode = CFlvPool::instance()->readSlice(mhashIdx, mhash, mreadIndex, &s, sliceNum, isTransPlay,
+			llMetaDataIdx, mreadFVIndex, mreadFAIndex, isExist, isTaskRestart, isPublishTask, isMetaDataChanged, isFirstVideoAudioChanged, mullTransUid);
+
+		if (!isExist)
+		{
+			ret = 2;
+			atomicDec(s);
+			break;
+		}
+
 		if (flvPoolCode == FlvPoolCodeError)
 		{
 			//logs->error("*** [CMission::doit] %s task is missing ***",
@@ -242,7 +248,30 @@ int  CMission::doit(cms_timer *t)
 			break;
 		}
 		else if (flvPoolCode == FlvPoolCodeOK)
-		{		
+		{
+			//首帧改变
+			if (isFirstVideoAudioChanged)
+			{
+				if (CFlvPool::instance()->isFirstVideoChange(mhashIdx, mhash, mreadFVIndex))
+				{
+					if (doFirstVideoAudio(true) == CMS_ERROR)
+					{
+						atomicDec(s);
+						ret = -1;
+						break;
+					}
+				}
+				if (CFlvPool::instance()->isFirstAudioChange(mhashIdx, mhash, mreadFAIndex))
+				{
+					if (doFirstVideoAudio(false) == CMS_ERROR)
+					{
+						atomicDec(s);
+						ret = -1;
+						break;
+					}
+				}
+			}
+
 			if (!mdurationtt->isInit())
 			{
 				mdurationtt->init("0.0.0.0","flv",murl);
@@ -258,7 +287,7 @@ int  CMission::doit(cms_timer *t)
 				//预防时间戳变小的情况
 				uiTimestamp = mdurationtt->keepTimestampIncrease(isVideo,uiTimestamp);
 				//预防时间戳变小的情况 结束
-				if (mreadIndex+1 != s->mllIndex)
+				if (mreadIndex+1 != s->mllIndex && mreadIndex != -1)
 				{
 					logs->warn("*** [CMission::doit] %s doit drop frame,cur idx %lld,next idx %lld ***",
 						murl.c_str(),mreadIndex,s->mllIndex);
@@ -273,7 +302,7 @@ int  CMission::doit(cms_timer *t)
 
 				if (isAudio){
 					frameType = 'A';
-					mMux->packTS((byte *)s->mData, s->miDataLen,frameType,uiTimestamp,0x01,0x01,&mMux->getAmcc(),Apid,&tca,pts64);
+					mMux->packTS((byte *)s->mData, s->miDataLen,frameType,uiTimestamp,0x01,0x01,&mMux->getAmcc(),Apid,&tca,mlastTca,pts64);
 					if (!mFAFlag)
 					{
 					}
@@ -285,7 +314,7 @@ int  CMission::doit(cms_timer *t)
 					{
 						frameType = 'I';
 					}
-					mMux->packTS((byte *)s->mData, s->miDataLen,frameType,uiTimestamp,0x01,0x01,&mMux->getVmcc(),Vpid,&tca,pts64);
+					mMux->packTS((byte *)s->mData, s->miDataLen,frameType,uiTimestamp,0x01,0x01,&mMux->getVmcc(),Vpid,&tca,mlastTca,pts64);
 					if (!mFVFlag)
 					{						
 					}
@@ -373,7 +402,17 @@ int  CMission::pushData(TsChunkArray *tca,byte frameType,uint64 timestamp)
 // 			murl.c_str(),msliceCount+1,mtsSaveNum,timestamp,msliceList[msliceCount]->msliceStart,timestamp-msliceList[msliceCount]->msliceStart,msliceList[msliceCount]->msliceIndex,msliceList.size());
 		mbTime = time(NULL);
 		if (msliceCount+1 > /*mtsNum+*/mtsSaveNum)
-		{			
+		{		
+			//要加上追加的长度
+			if (mlastTca != NULL)
+			{
+				ss = msliceList[msliceCount];
+				if (ss != NULL)
+				{
+					ss->msliceLen += mlastTca->mexSliceSize;
+				}
+			}
+
 			msliceIndx++;
 			ss = newSSlice();
 			ss->msliceIndex = msliceIndx;
@@ -382,8 +421,8 @@ int  CMission::pushData(TsChunkArray *tca,byte frameType,uint64 timestamp)
 
 			int writeLen = 0;
 			TsChunkArray *ttmp = allocTsChunkArray(188*2);
-			writeChunk(NULL,0,ttmp,(char *)mMux->getPat(),188,writeLen);
-			writeChunk(NULL,0,ttmp,(char *)mMux->getPmt(),188,writeLen);
+			writeChunk(NULL,0,ttmp,NULL,(char *)mMux->getPat(),188,writeLen);
+			writeChunk(NULL,0,ttmp,NULL,(char *)mMux->getPmt(),188,writeLen);
 
 			ss->msliceLen = 188*2;
 			ss->msliceLen += tca->msliceSize;
@@ -401,10 +440,22 @@ int  CMission::pushData(TsChunkArray *tca,byte frameType,uint64 timestamp)
 			std::vector<SSlice *>::iterator it = msliceList.begin();
 			ss = *it;
 			msliceList.erase(it);
-			atomicDec(ss);			
+			atomicDec(ss);
+
+			mlastTca = NULL;
 		}
 		else
 		{
+			//要加上追加的长度
+			if (mlastTca != NULL)
+			{
+				ss = msliceList[msliceCount];
+				if (ss != NULL)
+				{
+					ss->msliceLen += mlastTca->mexSliceSize;
+				}
+			}
+
 			msliceCount++;
 			msliceIndx++;
 			ss = newSSlice();
@@ -414,8 +465,8 @@ int  CMission::pushData(TsChunkArray *tca,byte frameType,uint64 timestamp)
 			
 			int writeLen = 0;
 			TsChunkArray *ttmp = allocTsChunkArray(188*2);
-			writeChunk(NULL,0,ttmp,(char *)mMux->getPat(),188,writeLen);
-			writeChunk(NULL,0,ttmp,(char *)mMux->getPmt(),188,writeLen);
+			writeChunk(NULL,0,ttmp,NULL,(char *)mMux->getPat(),188,writeLen);
+			writeChunk(NULL,0,ttmp,NULL,(char *)mMux->getPmt(),188,writeLen);
 
 			ss->msliceLen = 188*2;
 			ss->msliceLen += tca->msliceSize;
@@ -429,6 +480,8 @@ int  CMission::pushData(TsChunkArray *tca,byte frameType,uint64 timestamp)
 
 			logs->debug("[CMission::pushData] 2 %s pushData one ts succ,timestamp=%d",
 				murl.c_str(),timestamp-msliceList[msliceCount-1]->msliceStart);
+
+			mlastTca = NULL;
 		}
 	}
 	else
@@ -439,7 +492,15 @@ int  CMission::pushData(TsChunkArray *tca,byte frameType,uint64 timestamp)
 			ss->msliceStart = timestamp;
 		}
 		ss->msliceLen += tca->msliceSize;
+		//要加上追加的长度
+		if (mlastTca != NULL)
+		{
+			ss->msliceLen += mlastTca->mexSliceSize;
+		}
+
 		ss->marray.push_back(tca);
+
+		mlastTca = tca;
 	}
 	return 0;
 }
@@ -532,6 +593,7 @@ CMissionMgr::CMissionMgr()
 	{
 		guid[i] = i;
 		misRunning[i] = false;
+		mtid[i] = 0;
 	}
 }
 
@@ -573,6 +635,10 @@ void CMissionMgr::thread(uint32 i)
 
 bool CMissionMgr::run()
 {
+	if (gSendTakeTimeTT == 0)
+	{
+		gSendTakeTimeTT = getTimeUnix();
+	}
 	for (uint32 i = 0; i < NUM_OF_THE_HLS_MGR; i++)
 	{
 		misRunning[i] = true;
@@ -585,11 +651,23 @@ bool CMissionMgr::run()
 			misRunning[i] = false;
 			char date[128] = {0};
 			getTimeStr(date);
-			logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+			logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 			return false;
 		}		
 	}	
 	return true;
+}
+
+void CMissionMgr::stop()
+{
+	logs->debug("##### CMissionMgr::stop begin #####");
+	for (uint32 i = 0; i < NUM_OF_THE_HLS_MGR; i++)
+	{
+		misRunning[i] = false;
+		cmsWaitForThread(mtid[i], NULL);
+		mtid[i] = 0;
+	}
+	logs->debug("##### CMissionMgr::stop finish #####");
 }
 
 CMissionMgr *CMissionMgr::instance()
@@ -744,6 +822,6 @@ void CMissionMgr::tick(uint32 i,cms_timer *t)
 		isPrintf = true;
 		gSendTakeTimeTT = sendTakeTimeTT;
 	}
-	printTakeTime(gmapSendTakeTime,tB,tE,"CMissionMgr",isPrintf);
+	printTakeTime(gmapSendTakeTime,tB,tE,(char *)"CMissionMgr",isPrintf);
 	gSendTakeTime.Unlock();
 }

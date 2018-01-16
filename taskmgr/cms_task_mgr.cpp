@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,6 +35,7 @@ CTaskMgr *CTaskMgr::minstance = NULL;
 CTaskMgr::CTaskMgr()
 {
 	misRun = false;
+	mtid = 0;
 }
 
 CTaskMgr::~CTaskMgr()
@@ -98,7 +99,7 @@ void CTaskMgr::thread()
 bool CTaskMgr::run()
 {
 	misRun = true;
-	int res = cmsCreateThread(&mtid,routinue,this,true);
+	int res = cmsCreateThread(&mtid,routinue,this,false);
 	if (res == -1)
 	{
 		char date[128] = {0};
@@ -107,6 +108,15 @@ bool CTaskMgr::run()
 		return false;
 	}
 	return true;
+}
+
+void CTaskMgr::stop()
+{
+	logs->debug("##### CTaskMgr::stop begin #####");
+	misRun = false;
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
+	logs->debug("##### CTaskMgr::stop finish #####");
 }
 
 void CTaskMgr::createTask(HASH &hash,std::string pullUrl,std::string pushUrl,std::string oriUrl,

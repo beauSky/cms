@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -267,9 +267,8 @@ typedef struct _InboundChunkStream
 	RtmpMessage		*currentMessage;
 }InboundChunkStream;
 
-#define  APP_NAME          "cms"
+#define  APP_NAME          "cms(TK Blue)"
 #define  NUM_VERSION       "1.0.0.0"
-#define  APP_VERSION       "cms/1.0.0.0"
-#define  SERVER_NAME       "franza"
+#define  SERVER_NAME       "(TK Blue)"
 #define  RTMP_VERSION      34013312
 #endif

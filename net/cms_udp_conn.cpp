@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -64,13 +64,18 @@ map<int, UDPConn *> gudpConnMap[TIME_UDP_THREAD_NUM];
 CRWlock gudpConnRWLock[TIME_UDP_THREAD_NUM];
 
 
+/*#define MapSockKcpConnIter map<int, ikcpcb *>::iterator
+map<int, ikcpcb *> gkcpConnMap[TIME_UDP_THREAD_NUM];
+CRWlock gkcpConnRWLock[TIME_UDP_THREAD_NUM];*/
+
+
 int output(const char *buf, int len, struct IKCPCB *kcp, void *user)
 {
 	char szIP[25] = {0};
 	ipInt2ipStr(kcp->maddr.sin_addr.s_addr,szIP);
 // 	int port = ntohs(kcp->maddr.sin_port);
 // 	logs->debug("write sock %d addr %s:%d.len=%d",kcp->fd,szIP,port,len);
-	return sendto(kcp->fd,buf,len,0,(const sockaddr *)&kcp->maddr,sizeof(kcp->maddr));
+	return sendto(kcp->fd>0?kcp->fd:kcp->fdlisten,buf,len,0,(const sockaddr *)&kcp->maddr,sizeof(kcp->maddr));
 }
 
 unsigned int getConvID()
@@ -186,6 +191,8 @@ void popUDPConn(UDPConn *conn)
 
 void udpTickerCallBack(void *t)
 {
+	bool shouldClose = false;
+	UDPConn *conn = NULL;
 	cms_udp_timer *ct = (cms_udp_timer *)t;
 	int i = ct->fd;
 	if (i < 0)
@@ -197,10 +204,31 @@ void udpTickerCallBack(void *t)
 	MapSockUdpConnIter it = gudpConnMap[i].find(ct->fd);
 	if (it != gudpConnMap[i].end())
 	{
-		if (it->second->flushW(ct->uid) == CMS_ERROR)
+		conn = it->second;
+		if (conn->isClose() && conn->getCloseTime() > 30000)
 		{
-			//uid对不上 旧的计时器
-			atomicUdpDec(ct);
+			//30 second time out
+			shouldClose = true;
+		}
+		else
+		{
+			if (!conn->isUid(ct->uid))
+			{
+				//uid对不上 旧的计时器
+				atomicUdpDec(ct);
+			}
+			else
+			{
+				if (conn->flushW() == CMS_ERROR)
+				{
+					
+				}
+				if (conn->flushR() == CMS_ERROR)
+				{
+					
+				}
+				conn->ticker();
+			}
 		}
 	}
 	else
@@ -209,11 +237,137 @@ void udpTickerCallBack(void *t)
 		atomicUdpDec(ct);
 	}
 	gudpConnRWLock[i].UnRLock();
+	if (shouldClose)
+	{
+		UdpAddr ua = conn->udpAddr(); //获取udp对端peer
+		UDPListener *uls = (UDPListener *)ua.mlistener; //获取对应的udp listener
+		if (uls != NULL)
+		{
+			uls->delOneConn(ua);//从 listener 删除
+		}
+		popUDPConn(conn);
+		logs->debug("udpTickerCallBack delete one udp,addr %s fd=%d", ua.msAddr.c_str(),conn->fd());
+	}
 }
+
+//kcp处理
+/*void pushKCPConn(ikcpcb *kcp)
+{
+	int i = kcp->fd;
+	if (i < 0)
+	{
+		i = -i;
+	}
+	i = i % TIME_UDP_THREAD_NUM;
+	gkcpConnRWLock[i].WLock();
+	MapSockKcpConnIter it = gkcpConnMap[i].find(kcp->fd);
+	assert(it == gkcpConnMap[i].end());
+	gkcpConnMap[i].insert(make_pair(kcp->fd, kcp));
+	gkcpConnRWLock[i].UnWLock();
+	logs->debug("##### pushKCPConn add one  #####", kcp->fd);
+}
+
+void popKCPConn(ikcpcb *kcp)
+{
+	int i = kcp->fd;
+	if (i < 0)
+	{
+		i = -i;
+	}
+	i = i % TIME_UDP_THREAD_NUM;
+	gkcpConnRWLock[i].WLock();
+	MapSockKcpConnIter it = gkcpConnMap[i].find(kcp->fd);
+	if (it != gkcpConnMap[i].end())
+	{
+		gkcpConnMap[i].erase(it);
+	}
+	gkcpConnRWLock[i].UnWLock();
+	logs->debug("##### popKCPConn delete one  #####", kcp->fd);
+}
+
+void kcpTickerCallBack(void *t);
+void kcpTicker(ikcpcb *kcp)
+{
+	cms_udp_timer *cut = NULL;
+	if (kcp->tick == NULL)
+	{
+		logs->debug("##### kcpTicker make tick  #####", kcp->fd);
+		cut = mallcoCmsUdpTimer();
+		assert(cut != NULL);
+		pushKCPConn(kcp);
+		cms_udp_timer_init(cut, kcp->fd, kcpTickerCallBack, 0);
+		kcp->tick = cut;
+	}
+	else
+	{
+		cut = (cms_udp_timer *)kcp->tick;
+	}
+	cms_udp_timer_start(cut);
+}
+
+void kcpTickerCallBack(void *t)
+{	
+	cms_udp_timer *ct = (cms_udp_timer *)t;
+	int i = ct->fd;
+	if (i < 0)
+	{
+		i = -i;
+	}
+	i = i % TIME_UDP_THREAD_NUM;
+
+	bool needPop = false;
+	ikcpcb *kcp = NULL;
+	gkcpConnRWLock[i].RLock();
+	MapSockKcpConnIter it = gkcpConnMap[i].find(ct->fd);
+	if (it != gkcpConnMap[i].end())
+	{
+		kcp = it->second;
+		int64 tn = getTickCount();
+		if (tn - ct->start > 30*1000)
+		{
+			logs->debug("##### kcpTickerCallBack timeout  #####", kcp->fd);			
+			needPop = true;
+
+		}
+		else
+		{
+			if (ikcp_update(kcp, tn) < 0)
+			{
+				logs->debug("##### kcpTickerCallBack finish  #####", kcp->fd);			
+				needPop = true;
+			}
+			else
+			{
+				kcpTicker(kcp);
+			}
+		}
+	}
+	else
+	{
+		//找不到可能被删除了 一般不会出现
+		assert(0);
+		atomicUdpDec(ct);
+	}
+	gkcpConnRWLock[i].UnRLock();
+	if (needPop)
+	{
+		cms_udp_timer *cut = (cms_udp_timer *)kcp->tick;
+		freeCmsUdpTimer(cut);
+		if (kcp->fd < -1)
+		{
+			pushUdpSock(kcp->fd);
+		}
+		popKCPConn(kcp);
+		ikcp_release(kcp);		
+	}
+}*/
+//kcp处理 结束
 
 UDPConn::UDPConn(UdpAddr ua,IUINT32 conv,int fd,unsigned long ipInt,unsigned short port,bool isListen,ConnType connectType)
 {
+	misClose = false;
 	mwatcherWriteIO = NULL;
+	mwatcherReadIO = NULL;
 	mreadTimeout = 1;
 	mreadBytes = 0;
 	mwriteTimetou = 1;
@@ -231,12 +385,11 @@ UDPConn::UDPConn(UdpAddr ua,IUINT32 conv,int fd,unsigned long ipInt,unsigned sho
 	{
 		mfd = fd;
 	}
-	mkcp = ikcp_create(conv,fd,ipInt,port,NULL);
-	ikcp_setoutput(mkcp,output);
+	mkcp = ikcp_create(conv, mfd, mlsFd,ipInt,port,NULL);
 	ikcp_setoutput(mkcp,output);
 	ikcp_setmtu(mkcp,1400);
 	ikcp_wndsize(mkcp,128,128);
-	ikcp_nodelay(mkcp,1,50,0,1);
+	ikcp_nodelay(mkcp,0,20,0,1);
 
 	mconnectType = connectType;
 
@@ -255,7 +408,9 @@ UDPConn::UDPConn(UdpAddr ua,IUINT32 conv,int fd,unsigned long ipInt,unsigned sho
 
 UDPConn::UDPConn()
 {
+	misClose = false;
 	mwatcherWriteIO = NULL;
+	mwatcherReadIO = NULL;
 	mreadTimeout = 1;
 	mreadBytes = 0;
 	mwriteTimetou = 1;
@@ -275,13 +430,11 @@ UDPConn::~UDPConn()
 {
 	if (mfd > 0)
 	{
-		popUDPConn(this);
 		::close(mfd);
 		mfd = 0;
 	}
 	else if (mfd < 0)
 	{
-		popUDPConn(this);
 		pushUdpSock(mfd);
 	}
 	if (mkcp)
@@ -291,6 +444,10 @@ UDPConn::~UDPConn()
 	if (mwatcherWriteIO)
 	{
 		freeCmsNetEv(mwatcherWriteIO);
+	}
+	if (mwatcherReadIO)
+	{
+		freeCmsNetEv(mwatcherReadIO);
 	}
 	if (mtimer)
 	{
@@ -330,7 +487,7 @@ int UDPConn::dialUdp(char *addr,ConnType connectType)
 	mfd = socket(AF_INET,SOCK_DGRAM,0);
 	if (mfd == CMS_INVALID_SOCK)
 	{
-		logs->error("*** UDPConn dialTcp create socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
+		logs->error("*** UDPConn dialUdp create socket is error,errno=%d,errstr=%s *****",errno,strerror(errno));
 		return CMS_ERROR;
 	}
 	ticker();
@@ -349,6 +506,12 @@ int UDPConn::dialUdp(char *addr,ConnType connectType)
 			gbasePortInt = 0;
 		}
 		glockBasePortInt.Unlock();
+
+#ifdef __CMS_APP_DEBUG__
+		char szTime[30] = { 0 };
+		getTimeStr(szTime);
+		printf("%s >>>>>>22222 udp bind port %d fd=%d ticker\n", szTime, bindPort, mfd);
+#endif
 
 		to.sin_family = AF_INET;
 		to.sin_port = htons(bindPort);
@@ -374,7 +537,7 @@ int UDPConn::dialUdp(char *addr,ConnType connectType)
 	unsigned long ip;
 	if (!CDnsCache::instance()->host2ip(strHost.c_str(),ip))
 	{
-		logs->error("*** UDPConn dialTcp dns cache error *****");
+		logs->error("*** UDPConn dialUdp dns cache error *****");
 		::close(mfd);
 		mfd = -1;
 		return CMS_ERROR;
@@ -385,13 +548,13 @@ int UDPConn::dialUdp(char *addr,ConnType connectType)
 	char szAddr[25] = {0};
 	snprintf(szAddr,sizeof(szAddr),":%d",bindPort);
 	mladdr = szAddr;
-	logs->info("##### UDPConn dialTcp %s:%d fd=%d #####",strHost.c_str(),port,mfd);
+	logs->info("##### UDPConn dialUdp %s:%d fd=%d #####",strHost.c_str(),port,mfd);
 
-	mkcp = ikcp_create(getConvID(),mfd,ip,port,NULL);
+	mkcp = ikcp_create(getConvID(),mfd,-1,ip,port,NULL);
 	ikcp_setoutput(mkcp,output);
 	ikcp_setmtu(mkcp,1400);
 	ikcp_wndsize(mkcp,128,128);
-	ikcp_nodelay(mkcp,1,50,0,1);
+	ikcp_nodelay(mkcp,0,20,0,1);
 	
 
 	mua.miBindPort = bindPort;
@@ -423,14 +586,19 @@ int UDPConn::read(char* dstBuf,int len,int &nread)
 	int ret = CMS_OK;
 	nread = 0;
 	mlockKcp.Lock();
-	//
-	//判断是否已经断开 暂时没加
-	//
 	nread = ikcp_recv(mkcp,dstBuf,len);
 	if (nread < 0) 
 	{
 		logs->error("***** UDPConn read addr %s fd=%d ikcp_recv handle fail *****",mraddr.c_str(),mfd); 
 		merrcode = CMS_KCP_ERR_FAIL;
+		if (nread == CONN_HAS_BEEN_CLOSE)
+		{
+			merrcode = CMS_KCP_USER_CLOSED_CONN;
+		}
+		else if (nread == CONN_RECV_EOF)
+		{
+			merrcode = CMS_KCP_ERR_EOF;
+		}
 		ret = CMS_ERROR;
 		nread = 0;
 	}
@@ -448,17 +616,29 @@ int   UDPConn::write(char *srcBuf,int len,int &nwrite)
 	nwrite = 0;
 	int nbLeft = len;
 	mlockKcp.Lock();
+	int nn = 0;
 	for (;nwrite < len;)
 	{
 		//
 		//判断是否已经断开 暂时没加
-		//
-		if (ikcp_waitsnd(mkcp) < (int)mkcp->snd_wnd)
+		if (ikcp_is_valid(mkcp))
 		{
-			int max = (int)((mkcp->mss<<8)-mkcp->mss);
+			logs->error("***** UDPConn write addr %s fd=%d is close *****", mraddr.c_str(), mfd);
+			merrcode = CMS_KCP_USER_CLOSED_CONN;
+			ret = CMS_ERROR;
+			break;
+		}
+		//
+		/*if (ikcp_waitsnd(mkcp) < (int)mkcp->snd_wnd)
+		{
+			int max = (int)((mkcp->mss<<8)-mkcp->mss);*/
+		if (ikcp_snd_wnd_empty(mkcp))
+		{
+			int max = ikcp_snd_mss_buffer(mkcp);
 			if (nbLeft <= max)
 			{
-				if (ikcp_send(mkcp,srcBuf+nwrite,nbLeft) == 0)
+				nn = ikcp_send(mkcp, srcBuf + nwrite, nbLeft);
+				if (nn == 0)
 				{	
 					mwriteTotalLen += nbLeft;
 					nwrite += nbLeft;
@@ -469,13 +649,22 @@ int   UDPConn::write(char *srcBuf,int len,int &nwrite)
 				{
 					logs->error("***** UDPConn write addr %s fd=%d ikcp_send handle fail *****",mraddr.c_str(),mfd); 
 					merrcode = CMS_KCP_ERR_FAIL;
+					if (nn == CONN_HAS_BEEN_CLOSE)
+					{
+						merrcode = CMS_KCP_USER_CLOSED_CONN;
+					}
+					else if (nn == CONN_RECV_EOF)
+					{
+						merrcode = CMS_KCP_ERR_EOF;
+					}
 					ret = CMS_ERROR;
 					break;
 				}
 			}
 			else
 			{
-				if (ikcp_send(mkcp,srcBuf+nwrite,max) == 0)
+				nn = ikcp_send(mkcp, srcBuf + nwrite, max);
+				if (nn == 0)
 				{			
 					mwriteTotalLen += max;
 					nwrite += max;
@@ -485,6 +674,14 @@ int   UDPConn::write(char *srcBuf,int len,int &nwrite)
 				{
 					logs->error("***** 2 UDPConn write addr %s fd=%d ikcp_send handle fail *****",mraddr.c_str(),mfd); 
 					merrcode = CMS_KCP_ERR_FAIL;
+					if (nn == CONN_HAS_BEEN_CLOSE)
+					{
+						merrcode = CMS_KCP_USER_CLOSED_CONN;
+					}
+					else if (nn == CONN_RECV_EOF)
+					{
+						merrcode = CMS_KCP_ERR_EOF;
+					}
 					ret = CMS_ERROR;
 					break;
 				}
@@ -493,13 +690,18 @@ int   UDPConn::write(char *srcBuf,int len,int &nwrite)
 		}
 		else
 		{
+#ifdef __CMS_APP_DEBUG__
+			char szTime[30] = { 0 };
+			getTimeStr(szTime);
+			printf("%s >>>>>>22222 kcp snd window size not enough fd=%d ticker\n", szTime, mfd);
 // 			logs->error("***** kcp snd window size not enough *****");
+#endif
 			break;
 		}
 	}
 	if (nwrite > 0)
 	{
-		ikcp_flush(mkcp);
+		//ikcp_flush(mkcp);
 	}
 // 	logs->error("udp send total len=%d", mwriteTotalLen);
 	mlockKcp.Unlock();
@@ -587,17 +789,34 @@ long long UDPConn::getWriteBytes()
 
 void UDPConn::close()
 {
-	popUDPConn(this);
-	if (mfd > 0)
+	if (mkcp)
 	{
-		::close(mfd);
-		mfd = 0;
+		logs->debug("##### UDPConn close addr %s fd=%d need close #####", mraddr.c_str(), mfd);
+		ikcp_close(mkcp);		
+	}
+	else if (mfd > 0)
+	{
+		
 	}
 	else if (mfd < 0)
 	{
-		pushUdpSock(mfd);
-		mfd = 0;
-	}	
+		
+	}
+	if (!misClose)
+	{
+		misClose = true;
+		mcloseTime = getTickCount();
+	}
+}
+
+bool  UDPConn::isClose()
+{
+	return misClose;
+}
+
+uint32 UDPConn::getCloseTime()
+{
+	return getTickCount() - mcloseTime;
 }
 
 ConnType UDPConn::connectType()
@@ -616,7 +835,7 @@ void UDPConn::recvData()
 }
 
 int UDPConn::flushR()
-{
+{	
 	if (mfd > 0)
 	{
 		struct sockaddr_in addr;
@@ -626,17 +845,6 @@ int UDPConn::flushR()
 		IUINT32 conv;
 		int len = MTU_LIMIT;
 		data = new char[MTU_LIMIT];
-
-		bool isFullWndB = false;
-		bool isNFullWndE = false;
-
-		mlockKcp.Lock();
-		if (ikcp_waitsnd(mkcp) >= (int)mkcp->snd_wnd)
-		{
-			isFullWndB = true;
-		}
-		mlockKcp.Unlock();
-
 		do
 		{	
 			ret = recvfrom(mfd, data, len, 0, (struct sockaddr*)&addr, &addrLen);
@@ -657,15 +865,28 @@ int UDPConn::flushR()
 						delete[] data;
 						return CMS_ERROR;
 					}
+
+					//udp 由自己本身投递读事件
+					if (mwatcherReadIO)
+					{
+						mwatcherReadIO->mcallBack(mwatcherReadIO, EventRead);
+					}
 				}
 				else
 				{
+#ifdef __CMS_APP_DEBUG__
+					char szTime[30] = { 0 };
+					getTimeStr(szTime);
+					printf("%s >>>>>>22222 unknow legal length fd=%d ticker\n", szTime, mkcp->fd);
 					logs->debug(" UDPConn flushR addr %s fd=%d udp header is not enought ",mraddr.c_str(),mfd); 
+#endif
 				}
 			}
 			else if (ret < (int)IKCP_OVERHEAD && ret > 0)
 			{
+#ifdef __CMS_APP_DEBUG__
 				logs->debug(" UDPConn flushR addr %s fd=%d ienter IKCP_OVERHEAD error len=%d",mraddr.c_str(),mfd,ret); 
+#endif
 			}
 			else if (ret == -1)
 			{
@@ -674,20 +895,6 @@ int UDPConn::flushR()
 				break;
 			}
 		}while (true);
-
-		mlockKcp.Lock();
-		if (ikcp_waitsnd(mkcp) < (int)mkcp->snd_wnd)
-		{
-			isNFullWndE = true;
-		}
-		mlockKcp.Unlock();
-
-		if (isFullWndB && isNFullWndE && mwatcherWriteIO != NULL)
-		{
-			//缓冲区变成可写
-			mwatcherWriteIO->mcallBack(mwatcherWriteIO, EventWrite);
-			printf(">>>>>>11111 UDPConn::flushW 1 fd=%d write event\n", mfd);
-		}
 	}
 	else
 	{
@@ -708,49 +915,51 @@ int UDPConn::flushR()
 				merrcode = CMS_KCP_ERR_FAIL;
 				return CMS_ERROR;
 			}
+
+			//udp 由自己本身投递读事件
+			if (mwatcherReadIO)
+			{
+				mwatcherReadIO->mcallBack(mwatcherReadIO, EventRead);
+			}
 		}		
 	}
 	return CMS_OK;
 }
 
-int UDPConn::flushW(uint64 uid)
+int UDPConn::flushW()
+{
+	int waitSndSizeB = 0;
+	int waitSndSizeE = 0;
+
+	mlockKcp.Lock();
+	waitSndSizeB = ikcp_waitsnd(mkcp);	
+	
+	ikcp_update(mkcp,getTickCount());	
+	mtickerDo--;
+
+	waitSndSizeB = ikcp_waitsnd(mkcp);
+	mlockKcp.Unlock();
+
+	if (waitSndSizeE < waitSndSizeB && mwatcherWriteIO != NULL)
+	{
+		//缓冲区变成可写
+#ifdef __CMS_APP_DEBUG__
+		logs->debug("flushW addr %s fd=%d callback EventWrite", mraddr.c_str(), mfd);
+#endif
+
+		mwatcherWriteIO->mcallBack(mwatcherWriteIO, EventWrite);
+	}
+
+	return CMS_OK;
+}
+
+bool UDPConn::isUid(uint64 uid)
 {
 	if (uid != muid)
 	{
-		return CMS_ERROR;
+		return false;
 	}
-	printf(">>>>>>11111 UDPConn::flushW 1 fd=%d enter,mwatcherWriteIO is null %s,waitsnd=%d,snd=%d\n", 
-		mfd, mwatcherWriteIO?"false":"true", ikcp_waitsnd(mkcp), mkcp->snd_wnd);
-// 	bool isFullWndB = false;
-// 	bool isNFullWndE = false;
-	mlockKcp.Lock();	
-
-// 	if (ikcp_waitsnd(mkcp) >= (int)mkcp->snd_wnd)
-// 	{
-// 		isFullWndB = true;		
-// 	}
-
-	ikcp_update(mkcp,getTickCount());
-	//ikcp_flush(mkcp);
-
-// 	if (ikcp_waitsnd(mkcp) < (int)mkcp->snd_wnd)
-// 	{
-// 		isNFullWndE = true;
-// 	}
-	mlockKcp.Unlock();
-
-// 	if (isFullWndB && isNFullWndE)
-// 	{
-// 		//缓冲区变成可写
-// 		mwatcherWriteIO->mcallBack(mwatcherWriteIO,EventWrite);
-// 	}
-	mtickerDo--;
-	ticker();
-	printf(">>>>>>22222 UDPConn::flushW 1 fd=%d ticker\n", mfd);
-
-	printf(">>>>>>11111 UDPConn::flushW 1 fd=%d leave,mwatcherWriteIO is null %s,waitsnd=%d,snd=%d\n",
-		mfd, mwatcherWriteIO ? "false" : "true", ikcp_waitsnd(mkcp), mkcp->snd_wnd);
-	return CMS_OK;
+	return true;
 }
 
 UdpAddr UDPConn::udpAddr()
@@ -758,10 +967,20 @@ UdpAddr UDPConn::udpAddr()
 	return mua;
 }
 
-void UDPConn::evWriteIO(cms_net_ev *ev)
+cms_net_ev *UDPConn::evWriteIO()
 {
-	atomicInc(ev);		//计数器加1
-	mwatcherWriteIO = ev;
+	//写事件 udp 调用回调
+	mwatcherWriteIO = mallcoCmsNetEv();
+	initCmsNetEv(mwatcherWriteIO, writeEV, mfd, EventWrite);
+	return mwatcherWriteIO;
+}
+
+ cms_net_ev *UDPConn::evReadIO()
+{
+	 //读事件 udp 调用回调
+	 mwatcherReadIO = mallcoCmsNetEv();
+	 initCmsNetEv(mwatcherReadIO, readEV, mfd, EventRead);
+	 return mwatcherReadIO;
 }
 
 void UDPConn::pushUM(UdpMsg *um)
@@ -803,7 +1022,10 @@ void UDPConn::ticker()
 		assert(mtimer != NULL);
 		pushUDPConn(this);
 		cms_udp_timer_init(mtimer, mfd, udpTickerCallBack, muid);
+
+#ifdef __CMS_APP_DEBUG__
 		printf(">>>>>>22222 UDPConn::ticker 1 fd=%d ticker\n", mfd);
+#endif
 	}
 	assert(mtickerDo == 0);
 	cms_udp_timer_start(mtimer);
@@ -816,7 +1038,7 @@ UDPListener::UDPListener()
 	mruning = false;
 	miBindPort = 0;
 	mfd = -1;
-	mtid = -1;
+	mtid = 0;
 	mcallBack = NULL;
 	msockIO = NULL;
 }
@@ -854,11 +1076,8 @@ void UDPListener::stop()
 		::close(mfd);
 		mfd = -1;
 	}
-	if (mtid > 0)
-	{
-		cmsWaitForThread(mtid,NULL);
-		mtid = -1;
-	}	
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
 	logs->info("### UDPListener finish stop listening %s ###",mlistenAddr.c_str());
 }
 
@@ -902,12 +1121,6 @@ void UDPListener::thread()
 			{
 				connInfo = it->second;
 				connInfo->mconn->pushUM(um);		//udp连接投递数据
-				//udp listener 由自己本身投递读事件
-				if (connInfo->mwatcherReadIO)
-				{
-					connInfo->mwatcherReadIO->mcallBack(connInfo->mwatcherReadIO,EventRead);
-				}
-
 				if (!mlistUdpConn.empty())
 				{
 					isReadEvent = true;	//有新的连接没有处理
@@ -1051,60 +1264,15 @@ void *UDPListener::oneConn()
 	return conn;
 }
 
-void UDPListener::oneConnRead(void *one,Conn *conn)
-{
-	logs->debug(">>>>UDPListener oneConnRead.");
-	UDPConn* udpConn = (UDPConn*)one;	
-	mlockUdpConn.Lock();
-	MapUdpConnIter it = mmapUdpConn.find(udpConn->udpAddr());
-	if (it != mmapUdpConn.end())
-	{
-		//读事件
-		UdpConnInfo *connInfo = it->second;
-		connInfo->mwatcherReadIO = mallcoCmsNetEv();
-		initCmsNetEv(connInfo->mwatcherReadIO,readEV,connInfo->mconn->fd(),EventRead);
-		conn->evReadIO(connInfo->mwatcherReadIO);
-		connInfo->mwatcherReadIO->mcallBack(connInfo->mwatcherReadIO,EventRead);
-
-		//写事件
-		cms_net_ev *watcherWriteIO = mallcoCmsNetEv();
-		initCmsNetEv(watcherWriteIO,writeEV,connInfo->mconn->fd(),EventWrite);
-		connInfo->mconn->evWriteIO(watcherWriteIO);
-		watcherWriteIO->mcallBack(watcherWriteIO,EventWrite);
-		freeCmsNetEv(watcherWriteIO); //计数器已经在udp中加1 该处需要减1
-	}
-	else
-	{
-		logs->warn("######@@@@@ [never] UDPListener oneConn not udpConn @@@@@#####");
-		udpConn = NULL;
-	}
-	mlockUdpConn.Unlock();
-}
-
 void UDPListener::delOneConn(UdpAddr ua)
 {
 	mlockUdpConn.Lock();
 	MapUdpConnIter it = mmapUdpConn.find(ua);
 	if (it != mmapUdpConn.end())
 	{
-		freeCmsNetEv(it->second->mwatcherReadIO);
 		delete it->second;
 		mmapUdpConn.erase(it);
 	}
-	/*ListUdpConnIter itl = mlistUdpConn.begin();
-	for (; itl != mlistUdpConn.end();)
-	{
-		//理论上不会出现
-		logs->warn("#####@@@@@@ should not exist @@@@@@######");
-		if ((*itl)->udpAddr() == ua)
-		{
-			mlistUdpConn.erase(itl);
-		}
-		else
-		{
-			itl++;
-		}
-	}*/
 	mlockUdpConn.Unlock();
 }
 
@@ -1139,6 +1307,14 @@ int  UDPListener::accept()
 				um->mconv = conv;
 				pushUM(um);
 				data = NULL;
+			}
+			else
+			{
+#ifdef __CMS_APP_DEBUG__
+				char szTime[30] = { 0 };
+				getTimeStr(szTime);
+				printf("%s >>>>>>22222 listen unknow legal length fd=%d ticker\n", szTime, mfd);
+#endif
 			}
 		}
 		else if (ret == -1)

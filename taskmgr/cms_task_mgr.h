@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -59,6 +59,7 @@ public:
 	static void *routinue(void *param);
 	void thread();
 	bool run();
+	void stop();
 
 	//拉流任务接口或者被推流
 	bool	pullTaskAdd(HASH &hash,Conn *conn);

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,6 +35,8 @@ enum ConnType
 	TypeQuery
 };
 
+#ifndef CMS_BASIC_TYPE
+#define CMS_BASIC_TYPE
 typedef long long			int64;
 typedef unsigned long long	uint64;
 typedef int					int32;
@@ -44,6 +46,7 @@ typedef unsigned short		uint16;
 typedef char				int8;
 typedef unsigned char		uint8;
 typedef unsigned char		byte;
+#endif
 
 typedef struct _HASH{
 public:

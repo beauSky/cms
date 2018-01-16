@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -41,21 +41,21 @@ public:
 		byte *mcc,int16 pid,uint32 timestamp,byte **outBuf,int &outLen);
 
 	int  packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-		byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int pesLen);
+		byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int pesLen);
 	int  packTS(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-		byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64);
+		byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64);
 	int  writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
-		byte *mcc,int16 pid,TsChunkArray **tca,int pesLen);
+		byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,int pesLen);
 	void writeES(char *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-		byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int &pesLen);
+		byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int &pesLen);
 
 	void packPSI();
 	int  parseAAC(byte *inBuf,int inLen,byte **outBuf,int &outLen);
 	int  parseNAL(byte *inBuf,int inLen,byte **outBuf,int &outLen);
 	int  parseAACEx(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-		byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int &pesLen);
+		byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int &pesLen);
 	int  parseNALEx(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-		byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int &pesLen);
+		byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int &pesLen);
 
 	int  parseAACLen(byte *inBuf,int inLen);
 	int  parseNALLen(byte *inBuf,int inLen);

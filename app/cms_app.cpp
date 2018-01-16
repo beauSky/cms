@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -34,6 +34,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <taskmgr/cms_task_mgr.h>
 #include <static/cms_static.h>
 #include <net/cms_net_mgr.h>
+#include <common/cms_time.h>
 #include <map>
 #include <string>
 #include <signal.h>
@@ -155,10 +156,28 @@ string getVar(string key)
 
 void cycleServer()
 {
-	do 
+#ifdef just_test__CMS_APP_DEBUG__
+	cmsSleep(100000);
+#else
+	do
 	{
 		cmsSleep(1000);
 	} while (1);
+#endif
+	cms_timer_udp_thread_stop();
+	cms_ev_timer_thread_stop();
+	CNetMgr::instance()->stop();
+	CStatic::instance()->stop();
+	CFlvPool::instance()->stop();
+	CMissionMgr::instance()->stop();
+	CConnMgrInterface::instance()->stop();
+	CTaskMgr::instance()->stop();
+#ifdef _CMS_APP_USE_TIME_
+	cmsTimeStop();
+#endif
+	//CServer::instance()->stop();
+	cmsSleep(1000);
+	cmsLogStop();	
 }
 
 void setRlimit()
@@ -181,6 +200,10 @@ int main(int argc,char *argv[])
 		printf("***** main argc is error,should argc %% 2 == 1*****\n");
 		return 0;
 	}
+
+#ifdef _CMS_APP_USE_TIME_
+	cmsTimeRun();
+#endif
 	parseVar(argc-1,argv+1);
 	string config = getVar(ParamConfig);
 	if (config.empty())

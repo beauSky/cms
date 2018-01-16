@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -919,7 +919,7 @@ int	 CSMux::packTS(byte *inBuf,int inLen,byte frameType,byte pusi,byte afc,
 }
 
 int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-			 byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int pesLen)
+			 byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int pesLen)
 {
 	pts64 = 0;
 	int handleLen = 0;	//整个头部长度
@@ -1086,7 +1086,7 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 		head[4] = 0; // byte((packLen - 6) >> 8)
 		head[5] = 0; // byte(packLen - 6)
 // 		printf("============ packet len=%d,pesLen=%d ===============\n",packLen,pesLen);
-		writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 // 		printf("============ head len=%d ===============\n",handleLen);
 		byte pesPack[6] = {0};
 		pesPack[0] = 0;
@@ -1097,14 +1097,14 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 		pesPack[5] = 0xf0 ;                  //添加slice前加上0x00 0x00 0x00 0x01 0x09 0xf0 起始码
 
 		handleLen = 6;
-		writeES((char *)pesPack,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		writeES((char *)pesPack,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 // 		printf("============ pesPack len=%d ===============\n",handleLen);
 
-		writeES((char *)mSpsPpsNal,mSpsPpsNalLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		writeES((char *)mSpsPpsNal,mSpsPpsNalLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 // 		printf("============ mSpsPpsNal len=%d ===============\n",mSpsPpsNalLen);
 		
 		//writeES((char *)outNalBuf,outNalLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
-		parseNALEx(inBuf, inLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		parseNALEx(inBuf, inLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 // 		printf("============ outNalBuf len=%d ===============\n",outNalLen);
 
 //		delete[] outNalBuf;
@@ -1129,11 +1129,11 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 				packLen = handleLen + outAACLen;
 				head[4] = (byte)((packLen - 6) >> 8);
 				head[5] = (byte)(packLen - 6);
-				writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+				writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 
 				//writeES((char *)outAAC,outAACLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
 				//delete[] outAAC;
-				parseAACEx(inBuf,inLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+				parseAACEx(inBuf,inLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 				assert(pesLen == 0);
 			}
 			//fmt.Printf(" [inLen packLen %d %d] ", inLen, packLen)
@@ -1144,9 +1144,9 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 			packLen = handleLen + inLen - 1;
 			head[4] = (byte)((packLen - 6) >> 8);
 			head[5] = (byte)(packLen - 6);
-			writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+			writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 
-			writeES((char *)(inBuf+1),inLen-1,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+			writeES((char *)(inBuf+1),inLen-1,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 		}
 	} 
 	else 
@@ -1160,7 +1160,7 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 		head[4] = 0 ;// byte((packLen - 6) >> 8)
 		head[5] = 0; // byte(packLen - 6)
 
-		writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		writeES((char *)head,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 
 		byte pesPack[6] = {0};
 		pesPack[0] = 0;
@@ -1171,11 +1171,11 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 		pesPack[5] = 0xf0 ;                  //添加slice前加上0x00 0x00 0x00 0x01 0x09 0xf0 起始码
 
 		handleLen = 6;
-		writeES((char *)pesPack,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		writeES((char *)pesPack,handleLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 
 		//writeES((char *)outNalBuf,outNalLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
 		//delete[] outNalBuf;
-		parseNALEx(inBuf, inLen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		parseNALEx(inBuf, inLen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 		//fmt.Printf(" [inLen packLen NALlen headLen %d %d %d %d] ", inLen, packLen, NALlen, headLen)
 		//Test(NALbuf[:], NALlen)
 	}
@@ -1184,7 +1184,7 @@ int  CSMux::packPES(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte p
 }
 
 int  CSMux::packTS(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-			byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64)
+			byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64)
 {
 	int pesLen = packPESLen(inBuf,inLen,frameType,timestamp);
 	TsChunkArray *&chunk = *tca;
@@ -1258,7 +1258,7 @@ int  CSMux::packTS(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pu
 		}
 	}
 	int writeLen = 0;
-	writeChunk(NULL,0,chunk,(char *)head,4,writeLen);
+	writeChunk(NULL,0,chunk,lastTca,(char *)head,4,writeLen);
 // 	printf("1 writeChunk size %d\n",4);
 	if (adaptionFieldControl > 1)
 	{
@@ -1321,12 +1321,12 @@ int  CSMux::packTS(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pu
 		adaptionFiled[0] = (byte)(adaptationFiledLength - 1);
 		if (adaptationFiledLength <= 1)
 		{
-			writeChunk(NULL,0,chunk,(char *)adaptionFiled,1,writeLen);
+			writeChunk(NULL,0,chunk,lastTca,(char *)adaptionFiled,1,writeLen);
 // 			printf("22 writeChunk size %d\n",1);
 		}
 		else
 		{
-			writeChunk(NULL,0,chunk,(char *)adaptionFiled,2,writeLen);
+			writeChunk(NULL,0,chunk,lastTca,(char *)adaptionFiled,2,writeLen);
 // 			printf("2 writeChunk size %d\n",2);
 		}
 		
@@ -1336,7 +1336,7 @@ int  CSMux::packTS(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pu
 			byte *outPcrbuf = NULL;
 			int  outPcrBufLen = 0;
 			setPcr(DTS,&outPcrbuf,outPcrBufLen);
-			writeChunk(NULL,0,chunk,(char *)outPcrbuf,outPcrBufLen,writeLen);
+			writeChunk(NULL,0,chunk,lastTca,(char *)outPcrbuf,outPcrBufLen,writeLen);
 // 			printf("3 writeChunk size %d\n",outPcrBufLen);
 			delete[] outPcrbuf;
 			// 48 bit
@@ -1373,16 +1373,16 @@ int  CSMux::packTS(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pu
 			char ch = 0xFF;
 			for (int i = 0; StuffLen > 0 && i < StuffLen; i++)
 			{
-				writeChunk(NULL,0,chunk,(char *)&ch,1,writeLen);
+				writeChunk(NULL,0,chunk,lastTca,(char *)&ch,1,writeLen);
 			}
 // 			printf("4 writeChunk size %d\n",StuffLen);
 		}
 	}
-	return packPES(inBuf,inLen,frameType,timestamp,0,afc,mcc,pid,tca,pts64,pesLen);
+	return packPES(inBuf,inLen,frameType,timestamp,0,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 }
 
 int  CSMux::writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
-				   byte *mcc,int16 pid,TsChunkArray **tca,int pesLen)
+				   byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,int pesLen)
 {
 	*mcc = (*mcc + 1) % 16;
 	TsChunkArray *&chunk = *tca;
@@ -1456,7 +1456,7 @@ int  CSMux::writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
 		}
 	}
 	int writeLen = 0;
-	writeChunk(NULL,0,chunk,(char *)head,4,writeLen);
+	writeChunk(NULL,0,chunk,lastTca,(char *)head,4,writeLen);
 // 	printf("5 writeChunk size %d\n",4);
 
 	if (adaptionFieldControl > 1)
@@ -1520,12 +1520,12 @@ int  CSMux::writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
 		adaptionFiled[0] = (byte)(adaptationFiledLength - 1);
 		if (adaptationFiledLength <= 1)
 		{
-			writeChunk(NULL,0,chunk,(char *)adaptionFiled,1,writeLen);
+			writeChunk(NULL,0,chunk,lastTca,(char *)adaptionFiled,1,writeLen);
 // 			printf("77 writeChunk size %d\n",1);
 		}
 		else
 		{
-			writeChunk(NULL,0,chunk,(char *)adaptionFiled,2,writeLen);
+			writeChunk(NULL,0,chunk,lastTca,(char *)adaptionFiled,2,writeLen);
 // 			printf("7 writeChunk size %d\n",2);
 		}
 		//计算 adaptationFiledLength 结束
@@ -1534,7 +1534,7 @@ int  CSMux::writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
 			byte *outPcrbuf = NULL;
 			int  outPcrBufLen = 0;
 			setPcr(DTS,&outPcrbuf,outPcrBufLen);
-			writeChunk(NULL,0,chunk,(char *)outPcrbuf,outPcrBufLen,writeLen);
+			writeChunk(NULL,0,chunk,lastTca,(char *)outPcrbuf,outPcrBufLen,writeLen);
 			delete[] outPcrbuf;
 // 			printf("8 writeChunk size %d\n",outPcrBufLen);
 			// 48 bit
@@ -1571,7 +1571,7 @@ int  CSMux::writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
 			char ch = 0xFF;
 			for (int i = 0; StuffLen > 0 && i < StuffLen; i++)
 			{
-				writeChunk(NULL,0,chunk,(char *)&ch,1,writeLen);
+				writeChunk(NULL,0,chunk,lastTca,(char *)&ch,1,writeLen);
 			}
 // 			printf("9 writeChunk size %d,pesLen %d\n",StuffLen,pesLen);
 		}
@@ -1580,7 +1580,7 @@ int  CSMux::writeTsHeader(byte frameType,uint32 timestamp,byte pusi,byte afc,
 }
 
 void  CSMux::writeES(char *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-			 byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int &pesLen)
+			 byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int &pesLen)
 {
 // 	printf("12 writeES inLen %d,pesLen %d\n",inLen,pesLen);
 	int writeLen = 0;
@@ -1589,7 +1589,7 @@ void  CSMux::writeES(char *inBuf,int inLen,byte frameType,uint32 timestamp,byte 
 	while (inLen > 0)
 	{
 		writeLen = 0;		
-		ret = writeChunk(NULL,0,*tca,inBuf+handleLen,inLen,writeLen);
+		ret = writeChunk(NULL,0,*tca,lastTca,inBuf+handleLen,inLen,writeLen);
 // 		printf("10 writeChunk size %d,inLen %d,tca.msliceSize %d\n",writeLen,inLen,(*tca)->msliceSize);
 		if (ret == 1)
 		{
@@ -1599,7 +1599,7 @@ void  CSMux::writeES(char *inBuf,int inLen,byte frameType,uint32 timestamp,byte 
 			if (pesLen > 0)
 			{
 // 				printf("11 pesLen %d\n",pesLen);
-				writeTsHeader(frameType,timestamp,0,afc,mcc,pid,tca,pesLen);
+				writeTsHeader(frameType,timestamp,0,afc,mcc,pid,tca,lastTca,pesLen);
 			}
 		}
 		else
@@ -1678,7 +1678,7 @@ int  CSMux::parseAAC(byte *inBuf,int inLen,byte **outBuf,int &outLen)
 }
 
 int  CSMux::parseAACEx(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-				byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int &pesLen)
+				byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int &pesLen)
 {
 	//var outlen int = 0
 	if (inBuf[1] == 0x00)
@@ -1717,8 +1717,8 @@ int  CSMux::parseAACEx(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byt
 				frameLength	 			//13 一个ADTS帧的长度包括ADTS头和AAC原始流.
 				adtsBufferFullness 	    //11 0x7FF 说明是码率可变的码流
 				NumOfRawDataBlockInFrame//2*/
-		writeES((char *)outbuf,7,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
-		writeES((char *)inBuf+2,inLen-2,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+		writeES((char *)outbuf,7,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
+		writeES((char *)inBuf+2,inLen-2,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 		return 1;
 	}
 	return 0;
@@ -1831,7 +1831,7 @@ int  CSMux::parseNAL(byte *inBuf,int inLen,byte **outBuf,int &outLen)
 }
 
 int  CSMux::parseNALEx(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byte pusi,byte afc,
-				byte *mcc,int16 pid,TsChunkArray **tca,uint64 &pts64,int &pesLen)
+				byte *mcc,int16 pid,TsChunkArray **tca,TsChunkArray *lastTca,uint64 &pts64,int &pesLen)
 {
 	int NALlen = 0;
 	byte curNALtype = 0;
@@ -1860,8 +1860,8 @@ int  CSMux::parseNALEx(byte *inBuf,int inLen,byte frameType,uint32 timestamp,byt
 			curNALtype = inBuf[i+4] & 0x1f;
 			if (curNALtype > 0 /*&& curNALtype != 6*/ && NALlen < inLen)
 			{
-				writeES(spsPpsNal,4,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
-				writeES((char *)(inBuf+i+4),NALlen,frameType,timestamp,pusi,afc,mcc,pid,tca,pts64,pesLen);
+				writeES(spsPpsNal,4,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
+				writeES((char *)(inBuf+i+4),NALlen,frameType,timestamp,pusi,afc,mcc,pid,tca,lastTca,pts64,pesLen);
 				if (NALlen > 655356)
 				{
 					//logs->debug("\n[outlen NALlen  curNALtype %d %d %d]", outlen, NALlen, curNALtype);

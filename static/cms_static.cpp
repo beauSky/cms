@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -33,7 +33,7 @@ CStatic	*CStatic::minstance = NULL;
 CStatic::CStatic()
 {
 	misRun = false;
-	mtid = -1;
+	mtid = 0;
 	mdownloadTick = 0;
 	mdownloadSpeed = 0;
 	mdownloadTT = getTickCount();
@@ -71,7 +71,7 @@ void CStatic::freeInstance()
 bool CStatic::run()
 {
 	misRun = true;
-	int res = cmsCreateThread(&mtid,routinue,this,true);
+	int res = cmsCreateThread(&mtid,routinue,this,false);
 	if (res == -1)
 	{
 		char date[128] = {0};
@@ -84,7 +84,11 @@ bool CStatic::run()
 
 void CStatic::stop()
 {
+	logs->debug("##### CStatic::stop begin #####");
 	misRun = false;
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
+	logs->debug("##### CStatic::stop finish #####");
 }
 
 void CStatic::thread()

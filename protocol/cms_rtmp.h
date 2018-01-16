@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -66,6 +66,8 @@ public:
 	int writeBuffSize();
 	void setWriteBuffer(int size);
 	void syncIO();
+	bool isCmsConnection();
+	std::string protocol();
 
 	void shouldCloseNodelay();
 	cms_timer *cmsTimer2Write();
@@ -149,6 +151,7 @@ private:
 	RtmpConnStatus	mrtmpStatus;
 
 	bool			misCanDoTransmission;
+	bool			misCmsConnection;
 
 	//rtmp 协议相关
 	//read
@@ -184,5 +187,7 @@ private:
 	//音视频数据交换3秒后,关闭tcp nodelay
 	bool			misCloseNodelay;
 	unsigned long	mulNodelayEndTime;
+
+	std::string		msProtocol;
 };
 #endif

@@ -22,14 +22,21 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#include <interface/cms_protocol.h>
+#ifndef __CMS_TIME_H__
+#define __CMS_TIME_H__
+#include <sys/time.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <common/cms_type.h>
 
-CProtocol::CProtocol()
-{
 
-}
+int64 getCmsUnixTime();
+int64 getCmsMilSecond();
+int   getCmsDay();
+char *getCmsDayTime();
+char *getCmsTimeStr();
 
-CProtocol::~CProtocol()
-{
+void  cmsTimeRun();
+void  cmsTimeStop();
 
-}
+#endif

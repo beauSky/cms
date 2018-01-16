@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -79,42 +79,49 @@ public:
 	int	  setReadBuffer(int size);
 	int	  setWriteBuffer(int size);
 	int   flushR();
-	int   flushW(uint64 uid);
+	int   flushW();
 	UdpAddr udpAddr();
 	void  recvData();
 
-	void evWriteIO(cms_net_ev *ev);
+	cms_net_ev *evWriteIO();
+	cms_net_ev *evReadIO();
 
-	void  pushUM(UdpMsg *um);	
+	void  pushUM(UdpMsg *um);
+	void  ticker();
+	bool  isClose();
+	uint32 getCloseTime();
+	bool  isUid(uint64 uid);
 private:
 	bool  popUM(UdpMsg **um);
-	void  ticker();
+	
 
 	cms_udp_timer *mtimer;
 	uint64		  muid;
 	int           mtickerDo;
-
-	bool misListen;
-	int mlsFd;
-	int mfd;	
-	UdpAddr mua;
+	bool		  misClose;
+	uint32		  mcloseTime;
+	bool		  misListen;
+	int			  mlsFd;
+	int			  mfd;	
+	UdpAddr		  mua;
 	struct sockaddr_in mto;
-	string mraddr;
-	string mladdr;
-	long long mreadTimeout;
-	long long mreadBytes;
-	long long mwriteTimetou;
-	long long mwriteBytes;
-	ConnType mconnectType;
-	int  merrcode;
+	string		  mraddr;
+	string		  mladdr;
+	long long	  mreadTimeout;
+	long long	  mreadBytes;
+	long long	  mwriteTimetou;
+	long long	  mwriteBytes;
+	ConnType	  mconnectType;
+	int			  merrcode;	
 
-	ikcpcb *mkcp;
-	CLock  mlockKcp;
+	ikcpcb		  *mkcp;
+	CLock		  mlockKcp;
 
 	queue<UdpMsg*>	mqueueUdpMsg;
 	CLock			mlockUdpMsg;
 
-	cms_net_ev		*mwatcherWriteIO;
+	cms_net_ev		*mwatcherWriteIO;	//Ð´Çý¶¯Æ÷
+	cms_net_ev		*mwatcherReadIO;	//¶ÁÇý¶¯Æ÷
 
 	//test
 	int mwriteTotalLen;
@@ -122,12 +129,10 @@ private:
 
 typedef struct _UdpConnInfo{
 public:
-	cms_net_ev	*mwatcherReadIO;
 	UDPConn     *mconn;
 
 	_UdpConnInfo()
 	{
-		mwatcherReadIO = NULL;
 		mconn = NULL;
 	}
 }UdpConnInfo;
@@ -152,7 +157,6 @@ public:
 	ConnType listenType();
 	bool isTcp();
 	void *oneConn();
-	void oneConnRead(void *one,Conn *conn);
 private:
 	void pushUM(UdpMsg *um);
 	bool popUM(UdpMsg **um);

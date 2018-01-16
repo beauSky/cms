@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -78,6 +78,8 @@ CRtmpProtocol::CRtmpProtocol(void *super,RtmpType rtmpType,CBufferReader *rd,
 	mulNodelayEndTime = 0;
 	mps1 = NULL;
 	misCanDoTransmission = false;
+	misCmsConnection = false;
+	msProtocol = "rtmp-flv";
 }
 
 CRtmpProtocol::~CRtmpProtocol()
@@ -187,6 +189,13 @@ int CRtmpProtocol::handShake()
 
 int CRtmpProtocol::c2sComplexShakeC0C1()
 {
+#ifdef __CMS_APP_DEBUG__
+	char szTime[30] = { 0 };
+	getTimeStr(szTime);
+	printf("%s >>>>>22222 %s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s\n", szTime,
+		mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
+
 	logs->debug("%s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s",
 		mremoteAddr.c_str(),getRtmpType().c_str());
 	char szC0 = 0x03;//握手第一字节 0x03
@@ -229,6 +238,11 @@ int CRtmpProtocol::c2sComplexShakeC0C1()
 
 	logs->debug("%s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s status change to RtmpStatusShakeC0C1",
 		mremoteAddr.c_str(),getRtmpType().c_str());
+
+#ifdef __CMS_APP_DEBUG__
+	printf("%s >>>>>22222 %s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s status change to RtmpStatusShakeC0C1\n", szTime,
+		mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
 
 	return CMS_OK;
 }
@@ -338,8 +352,18 @@ int CRtmpProtocol::c2sComplexShakeS2()
 
 int CRtmpProtocol::s2cComplexShakeC012()
 {
+#ifdef __CMS_APP_DEBUG__
+	char szTime[30] = { 0 };
+	getTimeStr(szTime);
+#endif
+
 	if (mrtmpStatus == RtmpStatusShakeNone)
 	{
+#ifdef __CMS_APP_DEBUG__
+		printf("%s >>>>>22222 %s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake RtmpStatusShakeNone.\n", szTime,
+			mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
+
 		logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake RtmpStatusShakeNone.",
 			mremoteAddr.c_str(),getRtmpType().c_str());
 
@@ -354,16 +378,16 @@ int CRtmpProtocol::s2cComplexShakeC012()
 			//data not enough
 			return CMS_OK;
 		}
-		char *ch = mrdBuff->peek(1);
-		if (*ch != 0x03 && *ch != 0x06)
+		char c0 = *mrdBuff->peek(1);
+		if (c0 != 0x03 && c0 != 0x06)
 		{
 			logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake 0x03 or 06 fail ***",
 				mremoteAddr.c_str(),getRtmpType().c_str());
 			return CMS_ERROR;
 		}
-		char *c0 = mrdBuff->peek(SHAKE_RAND_DATA_LEN+1)+1;
+		char *c0c1 = mrdBuff->peek(SHAKE_RAND_DATA_LEN+1)+1;
 		c1s1 c1;
-		if ((c1.c1_parse(c0, srs_schema0)) != 0)
+		if ((c1.c1_parse(c0c1, srs_schema0)) != 0)
 		{
 			logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s parse c1 schema%d error ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),srs_schema0);
@@ -373,7 +397,7 @@ int CRtmpProtocol::s2cComplexShakeC012()
 		bool isValid = false;  
 		if (c1.c1_validate_digest(isValid) != 0 || !isValid)
 		{
-			if (c1.c1_parse(c0, srs_schema1) != 0)
+			if (c1.c1_parse(c0c1, srs_schema1) != 0)
 			{
 				logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s parse c1 schema%d error ***",
 					mremoteAddr.c_str(),getRtmpType().c_str(),srs_schema1);
@@ -405,7 +429,7 @@ int CRtmpProtocol::s2cComplexShakeC012()
 		}
 		// 发送 s0s1s2  
 		char* s0s1s2 = new char[3073];
-		s0s1s2[0] = 0x03;
+		s0s1s2[0] = c0;
 		s1.dump(s0s1s2 + 1);
 		s2.dump(s0s1s2 + 1537);
 
@@ -423,8 +447,12 @@ int CRtmpProtocol::s2cComplexShakeC012()
 
 		logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake change to RtmpStatusShakeC0C1.",
 			mremoteAddr.c_str(),getRtmpType().c_str());
+
+#ifdef __CMS_APP_DEBUG__
+		printf("%s >>>>>22222 %s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake change to RtmpStatusShakeC0C1.\n", szTime,
+			mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
 	}
-	//else
 	{
 		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN-mrdBuff->size()) == CMS_ERROR)
 		{
@@ -441,6 +469,11 @@ int CRtmpProtocol::s2cComplexShakeC012()
 			mremoteAddr.c_str(),getRtmpType().c_str());
 		mrtmpStatus = RtmpStatusShakeSuccess;
 		mfinishShake = true;
+
+#ifdef __CMS_APP_DEBUG__
+		printf("%s >>>>>22222 %s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s handshake succ.\n", szTime,
+			mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
 	}
 	return CMS_OK;
 }
@@ -457,60 +490,43 @@ int CRtmpProtocol::s2cSampleShakeC012()
 			//data not enough
 			return CMS_OK;
 		}
-		char ch = mrdBuff->readByte();
-		if (ch != 0x03 && ch != 0x06)
+		char c0 = mrdBuff->readByte();
+		if (c0 != 0x03 && c0 != 0x06)
 		{
 			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s complex shake 0x03 or 06 fail ***",
 				mremoteAddr.c_str(),getRtmpType().c_str());
 			return CMS_ERROR;
 		}
+		char *c1 = mrdBuff->readBytes(SHAKE_RAND_DATA_LEN);
 		mps1 = new char[SHAKE_RAND_DATA_LEN];
-		char *pS0S1S2 = new char[SHAKE_RAND_DATA_LEN+1];
-		pS0S1S2[0] = 0x03;
-		//s1
-		char *pSS = pS0S1S2+1;
-		struct timeval tv;
-		gettimeofday(&tv,NULL);
-		unsigned long ulTime = htonl(tv.tv_sec);
-		memcpy(pSS,(char *)&ulTime,4);
-
-		//5-8字节都为 0，协议修改了？
-		pSS[4] = 0x00;
-		pSS[5] = 0x00;
-		pSS[6] = 0x00;
-		pSS[7] = 0x00;
-		//随机字符串
-		for (int i = 8; i < SHAKE_RAND_DATA_LEN-8; ++i)
-		{
-			pSS[i] = rand() % 256;
-		}
+		memcpy(mps1, c1, SHAKE_RAND_DATA_LEN);		
 
 		int nwrite = 0;
-		int ret = mrw->write(pS0S1S2,SHAKE_RAND_DATA_LEN+1,nwrite);
-		if(ret != CMS_OK || nwrite != SHAKE_RAND_DATA_LEN+1)
+		char s0 = c0;
+		int ret = mrw->write(&s0, 1, nwrite);
+		if (ret != CMS_OK || nwrite != 1)
 		{
-			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s0s1 fail,errno=%d,strerrno=%s ***",
-				mremoteAddr.c_str(),getRtmpType().c_str(),mrw->errnos(),mrw->errnoCode());
-			delete[] pS0S1S2;
+			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s0 fail,errno=%d,strerrno=%s ***",
+				mremoteAddr.c_str(), getRtmpType().c_str(), mrw->errnos(), mrw->errnoCode());
 			return CMS_ERROR;
 		}
-		memcpy(mps1,pSS,SHAKE_RAND_DATA_LEN);
+		nwrite = 0;
+		ret = mrw->write(mps1,SHAKE_RAND_DATA_LEN,nwrite);
+		if(ret != CMS_OK || nwrite != SHAKE_RAND_DATA_LEN)
+		{
+			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s1 fail,errno=%d,strerrno=%s ***",
+				mremoteAddr.c_str(),getRtmpType().c_str(),mrw->errnos(),mrw->errnoCode());
+			return CMS_ERROR;
+		}
 		//s2
-		char *c1 = mrdBuff->readBytes(SHAKE_RAND_DATA_LEN);
-		//memcpy(pSS,c1+1,4);
-		//memcpy(pSS+4,(char *)&ulTime,4);
-		//memcpy(pSS+8,c1+9,SHAKE_RAND_DATA_LEN-8);
-
 		nwrite = 0;
 		ret = mrw->write(c1,SHAKE_RAND_DATA_LEN,nwrite);
 		if(ret != CMS_OK || nwrite != SHAKE_RAND_DATA_LEN)
 		{
 			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s2 fail,errno=%d,strerrno=%s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),mrw->errnos(),mrw->errnoCode());
-			delete[] pS0S1S2;
 			return CMS_ERROR;
 		}
-		delete[] pS0S1S2;
 		mrtmpStatus = RtmpStatusShakeC1;
 
 		logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s complex change to RtmpStatusShakeC1.",
@@ -541,16 +557,6 @@ int CRtmpProtocol::want2Read(bool isTimeout)
 {
 	if (isTimeout)
 	{
-		if (!isUdpAddrEmpty(mrw->udpAddr()))
-		{
-			if (mwrBuff->flush() == CMS_ERROR)//udp超时 发送ack确认
-			{
-				logs->error("%s [CRtmpProtocol::want2Read] rtmp %s flush fail,errno=%d,strerrno=%s ***",
-					mremoteAddr.c_str(), getRtmpType().c_str(), mwrBuff->errnos(), mwrBuff->errnoCode());
-				return CMS_ERROR;
-			}
-		}
-		
 		assert(mcmsReadTimeOutDo==1);
 		mcmsReadTimeOutDo--;
 		doReadTimeout();
@@ -593,6 +599,12 @@ int CRtmpProtocol::want2Read(bool isTimeout)
 
 int CRtmpProtocol::want2Write(bool isTimeout)
 {
+#ifdef __CMS_APP_DEBUG__
+	logs->debug("%s [CRtmpProtocol::want2Write] rtmp %s want2Write is timeout %s",
+		mremoteAddr.c_str(), getRtmpType().c_str(), isTimeout ? "true" : "false");
+#endif // __CMS_APP_DEBUG__
+
+	
 	if (isTimeout)
 	{
 		assert(mcmsWriteTimeOutDo==1);
@@ -618,7 +630,7 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 		logs->error("%s [CRtmpProtocol::want2Write] rtmp %s flush fail,errno=%d,strerrno=%s ***",
 			mremoteAddr.c_str(),getRtmpType().c_str(),mwrBuff->errnos(),mwrBuff->errnoCode());
 		return CMS_ERROR;
-	}	
+	}
 	//do write
 	if (mrtmpType == RtmpClient2Play || mrtmpType == RtmpServerBPublish || mrtmpType == RtmpServerBPlayOrPublish)
 	{
@@ -636,6 +648,7 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 			doWriteTimeout();
 			return CMS_OK;
 		}
+
 		//只有播放连接或者转推任务才需要发送流数据
 		if (mrtmpType == RtmpServerBPlay || (mrtmpType == RtmpClient2Publish && misCanDoTransmission))
 		{
@@ -1596,7 +1609,10 @@ int CRtmpProtocol::doConnect()
 	amf0::amf0BlockPush(block,data);
 	amf0::Amf0Data *object = amf0::amf0ObjectNew();
 	amf0::amf0ObjectAdd(object,"app",amf0::amf0StringNew((amf0::uint8 *)mlinkUrl.app.c_str(),mlinkUrl.app.length()));
-	amf0::amf0ObjectAdd(object,"flashVer",amf0::amf0StringNew((amf0::uint8 *)APP_VERSION,strlen(APP_VERSION)));
+	std::string appVersion;
+	appVersion.append(APP_NAME);
+	appVersion.append(NUM_VERSION);
+	amf0::amf0ObjectAdd(object,"flashVer",amf0::amf0StringNew((amf0::uint8 *)appVersion.c_str(), appVersion.length()));
 	amf0::amf0ObjectAdd(object,"tcUrl",amf0::amf0StringNew((amf0::uint8 *)strStream.str().c_str(),strStream.str().length()));
 	amf0::amf0ObjectAdd(object,"fpad",amf0::amf0BooleanNew(0x00));
 	amf0::amf0ObjectAdd(object,"capabilities",amf0::amf0NumberNew(15));
@@ -1966,7 +1982,10 @@ int CRtmpProtocol::doConnectSucc(int event,int objectEncoding)
 	amf0::amf0BlockPush(block,data);
 
 	amf0::Amf0Data *object = amf0::amf0ObjectNew();
-	amf0::amf0ObjectAdd(object,"fmsver",amf0::amf0StringNew((amf0::uint8*)APP_VERSION,strlen(APP_VERSION)));
+	std::string appVersion;
+	appVersion.append(APP_NAME);
+	appVersion.append(NUM_VERSION);
+	amf0::amf0ObjectAdd(object,"fmsver",amf0::amf0StringNew((amf0::uint8*)appVersion.c_str(), appVersion.length()));
 	amf0::amf0ObjectAdd(object,"capabilities",amf0::amf0NumberNew(255));
 	amf0::amf0ObjectAdd(object,"mode",amf0::amf0NumberNew(1));
 	amf0::amf0BlockPush(block,object);
@@ -2548,6 +2567,10 @@ int CRtmpProtocol::decodeConnect(amf0::Amf0Block *block)
 	amf0::amf0Block5Value(block,"pageUrl",mreferUrl);
 	amf0::amf0Block5Value(block,"flashVer",strFlashVer);
 	amf0::amf0Block5Value(block,"objectEncoding",strObjectEncoding);
+	if (strFlashVer.find(APP_NAME) != string::npos)
+	{
+		misCmsConnection = true;
+	}
 	string strEvent;
 	amf0::Amf0Type type = amf0::amf0Block5Value(block,1,strEvent);
 	if (type == amf0::AMF0_TYPE_NUMERIC)
@@ -2911,6 +2934,16 @@ void CRtmpProtocol::syncIO()
 		//没有数据可写
 		doWriteTimeout();
 	}
+}
+
+bool CRtmpProtocol::isCmsConnection()
+{
+	return misCmsConnection;
+}
+
+std::string CRtmpProtocol::protocol()
+{
+	return msProtocol;
 }
 
 int CRtmpProtocol::writeBuffSize()

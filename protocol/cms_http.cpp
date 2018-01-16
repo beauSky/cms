@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -450,6 +450,7 @@ CHttp::CHttp(Conn *super,CBufferReader *rd,
 	misReadChunkedLen = false;
 	mbyteReadWrite = NULL;
 	mchunkedReadrRN = 0;
+	msProtocol = "http-flv";
 }
 
 CHttp::~CHttp()
@@ -1037,6 +1038,16 @@ void CHttp::syncIO()
 		msuper->evWriteIO();
 		doWriteTimeout();
 	}
+}
+
+bool CHttp::isCmsConnection()
+{
+	return false;
+}
+
+std::string CHttp::protocol()
+{
+	return msProtocol;
 }
 
 void CHttp::setChunked()

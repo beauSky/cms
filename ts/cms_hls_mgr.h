@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -95,6 +95,9 @@ private:
 	bool	mFVFlag;	//是否读到首帧视频(SPS/PPS)
 	int64	mbTime;		//最后一个切片的生成时间
 	CSMux	*mMux;      //转码器
+	TsChunkArray *mlastTca;//节省空间
+
+	uint64  mullTransUid;
 
 	CDurationTimestamp *mdurationtt;
 };
@@ -108,6 +111,7 @@ public:
 	static void *routinue(void *param);
 	void thread(uint32 i);
 	bool run();
+	void stop();
 
 	static CMissionMgr *instance();
 	static void freeInstance();

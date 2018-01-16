@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -394,7 +394,9 @@ void CNetDispatch::dispatchAccept(cms_net_ev *watcher,int fd)
 					else
 					{
 						//目前udp只在rtmp中使用
-						conn->oneConnRead(tcp1udp,rtmp);
+						UDPConn *udp = (UDPConn *)tcp1udp;
+						rtmp->evWriteIO(udp->evWriteIO());
+						rtmp->evReadIO(udp->evReadIO());
 					}
 				}
 				else

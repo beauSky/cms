@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -39,19 +39,25 @@ using namespace std;
 
 void atomicInc(Slice *s)
 {
-	__sync_add_and_fetch(&s->mionly,1);//当数据超时，且没人使用时，删除
+	if (s != NULL)
+	{
+		__sync_add_and_fetch(&s->mionly, 1);//当数据超时，且没人使用时，删除
+	}	
 }
 
 void atomicDec(Slice *s)
 {
-	if (__sync_sub_and_fetch(&s->mionly,1) == 0)//当数据超时，且没人使用时，删除
+	if (s != NULL)
 	{
-		if (s->mData)
+		if (__sync_sub_and_fetch(&s->mionly, 1) == 0)//当数据超时，且没人使用时，删除
 		{
-			delete[] s->mData;
+			if (s->mData)
+			{
+				delete[] s->mData;
+			}
+			delete s;
 		}
-		delete s;
-	}
+	}	
 }
 
 Slice *newSlice()
@@ -183,6 +189,10 @@ CFlvPool *CFlvPool::minstance = NULL;
 CFlvPool::CFlvPool()
 {
 	misRun = false;
+	for (int i = 0; i < FLV_POOL_COUNT; i++)
+	{
+		mtid[i] = 0;
+	}
 }
 
 CFlvPool::~CFlvPool()
@@ -328,8 +338,14 @@ void CFlvPool::freeInstance()
 
 void CFlvPool::stop()
 {
+	logs->debug("##### CFlvPool::stop begin #####");
 	misRun = false;
-	cmsWaitForMultiThreads(FLV_POOL_COUNT,mtid);
+	for (int i = 0; i < FLV_POOL_COUNT; i++)
+	{
+		cmsWaitForThread(mtid[i], NULL);
+		mtid[i] = 0;
+	}
+	logs->debug("##### CFlvPool::stop finish #####");
 }
 
 uint32 CFlvPool::hashIdx(HASH &hash)
@@ -395,7 +411,7 @@ int  CFlvPool::readSlice(uint32 i, HASH &hash, int64 &llIdx, Slice **s, int &sli
 	mhashSliceLock[i].RLock();
 	MapHashStreamIter iterM = mmapHashSlice[i].find(hash);
 	if (iterM != mmapHashSlice[i].end())
-	{		
+	{	
 		ret = FlvPoolCodeOK;
 		StreamSlice *ss = iterM->second;
 		ss->mLock.RLock();
@@ -575,6 +591,10 @@ int  CFlvPool::readSlice(uint32 i, HASH &hash, int64 &llIdx, Slice **s, int &sli
 			atomicInc(*s); //当数据超时，且没人使用时，删除
 		}
 		ss->mLock.UnRLock();
+	}
+	else
+	{
+		logs->info(">>>>> [CFlvPool::readSlice] not find task.");
 	}
 	mhashSliceLock[i].UnRLock();
 	return ret;
