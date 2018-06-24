@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -27,7 +27,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <common/cms_type.h>
 #include <core/cms_lock.h>
 #include <core/cms_thread.h>
-#include <json/json.h>
+#include <cJSON/cJSON.h>
 #include <static/cms_static_common.h>
 #include <string>
 #include <map>
@@ -58,7 +58,7 @@ private:
 	void handle(OneTaskMeida *otm);
 	void handle(OneTaskMem *otm);
 
-	int getTaskInfo(Json::Value &value);
+	int getTaskInfo(cJSON **value);
 
 	float		getMemUsage();
 	int			getMemSize();

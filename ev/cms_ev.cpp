@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -27,24 +27,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <dispatch/cms_net_dispatch.h>
 #include <core/cms_lock.h>
 #include <common/cms_utility.h>
-#include <core/cms_thread.h>
 #include <log/cms_log.h>
 #include <queue>
 #include <assert.h>
 using namespace std;
 
 #define TIME_OUT_MIL_SECOND	10
-#define TIME_IN_MIL_SECOND	1000
+#define TIME_IN_MIL_SECOND	10
 //写超时
 queue<cms_timer *> gqueueWT;
 CLock gqueueWL;
 bool  gqueueWR = false;
-cms_thread_t gqueueWTT;
+cms_thread_t gqueueWTT = 0;
 //读超时
 queue<cms_timer *> gqueueRT;
 CLock gqueueRL;
 bool  gqueueRR = false;
-cms_thread_t gqueueRTT;
+cms_thread_t gqueueRTT = 0;
 
 void atomicInc(cms_timer *ct)
 {
@@ -82,7 +81,7 @@ void *cms_timer_write_thread(void *param)
 	do 
 	{
 		is = false;
-		mils = 1;
+		mils = 5;
 		
 		gqueueWL.Lock();
 		if (!gqueueWT.empty())
@@ -114,6 +113,18 @@ void *cms_timer_write_thread(void *param)
 	return NULL;
 }
 
+void cms_ev_timer_thread_stop()
+{
+	logs->debug("##### cms_ev_timer_thread_stop begin #####");
+	gqueueRR = false;
+	gqueueWR = false;
+	cmsWaitForThread(gqueueRTT, NULL);
+	gqueueRTT = 0;
+	cmsWaitForThread(gqueueWTT, NULL);
+	gqueueWTT = 0;
+	logs->debug("##### cms_ev_timer_thread_stop finish #####");
+}
+
 void *cms_timer_read_thread(void *param)
 {
 	logs->info("##### cms_timer_read_thread enter thread=%d ###", gettid());
@@ -124,12 +135,12 @@ void *cms_timer_read_thread(void *param)
 	do 
 	{
 		is = false;
-		mils = 500;
+		mils = 10;
 
 		gqueueRL.Lock();
 		if (!gqueueRT.empty())
 		{
-			t = (long long)getTickCount();			
+			t = (long long)getTickCount();
 			ct = gqueueRT.front();
 			if (t > ct->tick)
 			{
@@ -179,24 +190,38 @@ void cms_timer_start(cms_timer *ct,bool isWrite/* = true*/)
 	{
 		ct->tick = (long long)getTickCount()+TIME_OUT_MIL_SECOND;
 		gqueueWL.Lock();
-		if (!gqueueWR)
+		if (gqueueWTT == 0)
 		{
 			gqueueWR = true;
-			cmsCreateThread(&gqueueWTT,cms_timer_write_thread,NULL,true);		
+			cmsCreateThread(&gqueueWTT,cms_timer_write_thread,NULL,false);		
 		}
-		gqueueWT.push(ct);
+		if (gqueueWR)
+		{
+			gqueueWT.push(ct);
+		}
+		else
+		{
+			atomicDec(ct);
+		}
 		gqueueWL.Unlock();
 	}
 	else
 	{
 		ct->tick = (long long)getTickCount()+TIME_IN_MIL_SECOND;
 		gqueueRL.Lock();
-		if (!gqueueRR)
+		if (gqueueRTT == 0)
 		{
 			gqueueRR = true;
-			cmsCreateThread(&gqueueRTT,cms_timer_read_thread,NULL,true);		
+			cmsCreateThread(&gqueueRTT,cms_timer_read_thread,NULL, false);
 		}
-		gqueueRT.push(ct);
+		if (gqueueRR)
+		{
+			gqueueRT.push(ct);
+		}
+		else
+		{
+			atomicDec(ct);
+		}		
 		gqueueRL.Unlock();
 	}	
 }

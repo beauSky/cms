@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,7 +35,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <protocol/cms_amf0.h>
 #include <conn/cms_conn_rtmp.h>
 #include <flvPool/cms_flv_pool.h>
-#include <libev/ev.h>
 #include <map>
 #include <string>
 
@@ -66,8 +65,10 @@ public:
 	int writeBuffSize();
 	void setWriteBuffer(int size);
 	void syncIO();
+	bool isCmsConnection();
+	std::string protocol();
 
-	void shouldCloseNodelay();
+	void shouldCloseNodelay(bool force = false);
 	cms_timer *cmsTimer2Write();
 	cms_timer *cmsTimer2Read();
 private:
@@ -148,6 +149,9 @@ private:
 	RtmpType		mrtmpType;
 	RtmpConnStatus	mrtmpStatus;
 
+	bool			misCanDoTransmission;
+	bool			misCmsConnection;
+
 	//rtmp 协议相关
 	//read
 	bool			misFMLEPublish;//针对flash执行不同逻辑
@@ -182,5 +186,7 @@ private:
 	//音视频数据交换3秒后,关闭tcp nodelay
 	bool			misCloseNodelay;
 	unsigned long	mulNodelayEndTime;
+
+	std::string		msProtocol;
 };
 #endif

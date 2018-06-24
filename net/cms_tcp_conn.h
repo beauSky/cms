@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -25,20 +25,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __CMS_TCP_CONN_H__
 #define __CMS_TCP_CONN_H__
 #include <interface/cms_read_write.h>
+#include <interface/cms_conn_listener.h>
+#include <common/cms_type.h>
 #include <core/cms_lock.h>
 #include <netinet/in.h>
 #include <string>
 #include <queue>
 using namespace std;
-
-enum ConnType
-{
-	TypeNetNone,
-	TypeHttp,
-	TypeHttps,
-	TypeRtmp,
-	TypeQuery
-};
 
 class TCPConn:public CReaderWriter
 {
@@ -67,7 +60,12 @@ public:
 	int   setNodelay(int on);
 	int	  setReadBuffer(int size);
 	int	  setWriteBuffer(int size);
+	int   flushR();
+	int   flushW();
+	UdpAddr udpAddr();
+	int   netType() { return NetTcp; };
 private:
+	UdpAddr mua;
 	int mfd;
 	struct sockaddr_in mto;
 	string mraddr;
@@ -80,15 +78,19 @@ private:
 	int  merrcode;
 };
 
-class TCPListener
+class TCPListener:public CConnListener
 {
 public:
 	TCPListener();
+	~TCPListener();
+	//重载
 	int  listen(char* addr,ConnType listenType);
 	void stop();
 	int  accept();
 	int  fd();
 	ConnType listenType();
+	bool isTcp();
+	void *oneConn();
 private:
 	string  mlistenAddr;
 	bool	mruning;

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,15 +35,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DropVideoServerBufLess		2000
 #define DropVideoLoseBufTime		5
 #define DropVideoLoseBufMaxTime		10
-
-int64 MathAbs(int64 value) 
-{
-	if (value < 0) 
-	{
-		return 0 - value;
-	}
-	return value;
-}
 
 CFastBitRate::CFastBitRate()
 {

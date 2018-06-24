@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -37,6 +37,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 CConnMgr::CConnMgr(int i)
 {
 	mthreadIdx = i;
+	mtid = 0;
 }
 
 CConnMgr::~CConnMgr()
@@ -66,30 +67,30 @@ void CConnMgr::addOneConn(int fd,Conn *c)
 void CConnMgr::delOneConn(int fd)
 {
 	CNetDispatch::instance()->delOneDispatch(fd);
+	Conn *conn = NULL;
 	mfdConnLock.WLock();
 	MapConnInter it = mfdConn.find(fd);
 	if (it != mfdConn.end())
 	{
 		mfdConn.erase(it);
-		if (it->second)
-		{
-			delete it->second;
-		}
+		conn = it->second;		
 	}
-	mfdConnLock.UnWLock();	
+	mfdConnLock.UnWLock();
+	if (conn)
+	{
+		delete conn;
+	}
 }
 
 //TEST
 std::map<unsigned long,unsigned long> gmapCSendTakeTime;
-int64 gCSendTakeTimeTT = getTimeUnix();
+int64 gCSendTakeTimeTT;
 CLock gCSendTakeTime;
 //TEST end
 
 void CConnMgr::dispatchEv(FdEvents *fe)
 {
 	unsigned long tB = getTickCount();
-
-
 	bool isSucc = true;
 	mfdConnLock.RLock();
 	MapConnInter it = mfdConn.find(fe->fd);
@@ -102,6 +103,10 @@ void CConnMgr::dispatchEv(FdEvents *fe)
 			isSucc = false;
 			it->second->stop("");
 		}
+	}
+	else
+	{
+		logs->debug(">>>>CConnMgr::dispatchEv not find sock %d.",fe->fd);
 	}
 	mfdConnLock.UnRLock();
 	if (!isSucc)
@@ -118,7 +123,7 @@ void CConnMgr::dispatchEv(FdEvents *fe)
 		isPrintf = true;
 		gCSendTakeTimeTT = sendTakeTimeTT;
 	}
-	printTakeTime(gmapCSendTakeTime,tB,tE,"CConnMgr",isPrintf);
+	printTakeTime(gmapCSendTakeTime,tB,tE,(char *)"CConnMgr",isPrintf);
 	gCSendTakeTime.Unlock();
 }
 
@@ -180,7 +185,7 @@ bool CConnMgr::run()
 	{
 		char date[128] = {0};
 		getTimeStr(date);
-		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 		return false;
 	}
 	return true;
@@ -188,8 +193,11 @@ bool CConnMgr::run()
 
 void CConnMgr::stop()
 {
+	logs->debug("##### CConnMgr::stop begin #####");
 	misRun = false;
 	cmsWaitForThread(mtid,NULL);
+	mtid = 0;
+	logs->debug("##### CConnMgr::stop finish #####");
 }
 
 void *CConnMgr::routinue(void *param)
@@ -243,11 +251,12 @@ CConnMgrInterface *CConnMgrInterface::minstance = NULL;
 CConnMgrInterface::CConnMgrInterface()
 {
 	misRun = false;
+	mtid = 0;
 	int num = sysconf(_SC_NPROCESSORS_CONF);
 	logs->debug("######## system has %d processor(s) #########", num);
-	if (num < NUM_OF_THE_CONN_MGR)
+	if (num < APP_ALL_MODULE_THREAD_NUM)
 	{
-		num = NUM_OF_THE_CONN_MGR;
+		num = APP_ALL_MODULE_THREAD_NUM;
 	}
 	for (int i =0; i < num;i ++)
 	{
@@ -258,12 +267,7 @@ CConnMgrInterface::CConnMgrInterface()
 
 CConnMgrInterface::~CConnMgrInterface()
 {
-	for (int i =0; i < NUM_OF_THE_CONN_MGR;i ++)
-	{
-		mconnMgrArray[i]->stop();
-		delete mconnMgrArray[i];
-		mconnMgrArray[i] = NULL;
-	}
+	
 }
 
 CConnMgrInterface *CConnMgrInterface::instance()
@@ -286,67 +290,116 @@ void CConnMgrInterface::freeInstance()
 
 void CConnMgrInterface::addOneConn(int fd,Conn *c)
 {
-	int i = fd % NUM_OF_THE_CONN_MGR;
+	int i = 0;
+	if (fd < 0)
+	{
+		i = (~(fd-1)) % APP_ALL_MODULE_THREAD_NUM;
+	}
+	else
+	{
+		i = fd % APP_ALL_MODULE_THREAD_NUM;
+	}
 	mconnMgrArray[i]->addOneConn(fd,c);
 }
 
 void CConnMgrInterface::delOneConn(int fd)
 {
-	int i = fd % NUM_OF_THE_CONN_MGR;
+	int i = 0;
+	if (fd < 0)
+	{
+		i = (~(fd-1)) % APP_ALL_MODULE_THREAD_NUM;
+	}
+	else
+	{
+		i = fd % APP_ALL_MODULE_THREAD_NUM;
+	}
 	mconnMgrArray[i]->delOneConn(fd);
 }
 
-Conn *CConnMgrInterface::createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
-									,ConnType connectType,RtmpType rtmpType)
+Conn *CConnMgrInterface::createConn(HASH &hash,char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
+									,ConnType connectType,RtmpType rtmpType,bool isTcp/* = true*/)
 {
 	Conn *conn = NULL;
-	TCPConn *tcp = new TCPConn();
-	if (tcp->dialTcp(addr,connectType) == CMS_ERROR)
+	if (isTcp)
 	{
-		return NULL;
-	}
-	if (connectType == TypeHttp || connectType == TypeHttps)
-	{
-		ChttpClient *http = new ChttpClient(tcp,pullUrl,oriUrl,strReferer,connectType == TypeHttp?false:true);
-		if (http->doit() != CMS_ERROR)
+		TCPConn *tcp = new TCPConn();
+		if (tcp->dialTcp(addr,connectType) == CMS_ERROR)
 		{
-			CConnMgrInterface::instance()->addOneConn(tcp->fd(),http);
-
-			http->evReadIO();
-			http->evWriteIO();
-			conn = http;
-			if (tcp->connect() == CMS_ERROR)
+			return NULL;
+		}
+		if (connectType == TypeHttp || connectType == TypeHttps)
+		{
+			ChttpClient *http = new ChttpClient(hash,tcp,pullUrl,oriUrl,strReferer,connectType == TypeHttp?false:true);
+			if (http->doit() != CMS_ERROR)
 			{
-				CConnMgrInterface::instance()->delOneConn(tcp->fd());
+				CConnMgrInterface::instance()->addOneConn(tcp->fd(),http);
+
+				http->evReadIO();
+				http->evWriteIO();
+				conn = http;
+				if (tcp->connect() == CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->delOneConn(tcp->fd());
+					delete http;
+					conn = NULL;
+				}
+			}
+			else
+			{
 				delete http;
-				conn = NULL;
 			}
 		}
-		else
+		else if (connectType == TypeRtmp)
 		{
-			delete http;
+			CConnRtmp *rtmp = new CConnRtmp(hash,rtmpType,tcp,pullUrl,pushUrl);
+			if (rtmp->doit() != CMS_ERROR)
+			{
+				CConnMgrInterface::instance()->addOneConn(tcp->fd(),rtmp);
+
+				rtmp->evReadIO();
+				rtmp->evWriteIO();
+				conn = rtmp;
+				if (tcp->connect() == CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->delOneConn(tcp->fd());
+					delete rtmp;
+					conn = NULL;
+				}
+			}
+			else
+			{
+				delete rtmp;
+			}
 		}
 	}
-	else if (connectType == TypeRtmp)
+	else
 	{
-		CConnRtmp *rtmp = new CConnRtmp(rtmpType,tcp,pullUrl,pushUrl);
-		if (rtmp->doit() != CMS_ERROR)
+		UDPConn *udp = new UDPConn();
+		if (udp->dialUdp(addr,connectType) == CMS_ERROR)
 		{
-			CConnMgrInterface::instance()->addOneConn(tcp->fd(),rtmp);
-
-			rtmp->evReadIO();
-			rtmp->evWriteIO();
-			conn = rtmp;
-			if (tcp->connect() == CMS_ERROR)
-			{
-				CConnMgrInterface::instance()->delOneConn(tcp->fd());
-				delete rtmp;
-				conn = NULL;
-			}
+			delete udp;
+			return NULL;
 		}
-		else
+		if (connectType == TypeRtmp)
 		{
-			delete rtmp;
+			CConnRtmp *rtmp = new CConnRtmp(hash,rtmpType,udp,pullUrl,pushUrl);
+			if (rtmp->doit() != CMS_ERROR)
+			{
+				CConnMgrInterface::instance()->addOneConn(udp->fd(),rtmp);
+				rtmp->evWriteIO(udp->evWriteIO());
+				rtmp->evReadIO(udp->evReadIO());
+				conn = rtmp;
+				if (udp->connect() == CMS_ERROR)
+				{
+					CConnMgrInterface::instance()->delOneConn(udp->fd());
+					delete rtmp;
+					conn = NULL;
+				}
+			}
+			else
+			{
+				delete rtmp;
+			}
 		}
 	}
 	return conn;
@@ -361,20 +414,39 @@ void *CConnMgrInterface::routinue(void *param)
 
 void CConnMgrInterface::thread()
 {
-	logs->info(">>>>> CConnMgrInterface thread pid=%d\n",gettid());
-	logs->info(">>>>> CConnMgrInterface thread leave pid=%d\n",gettid());
+	logs->info(">>>>> CConnMgrInterface thread pid=%d",gettid());
+	logs->info(">>>>> CConnMgrInterface thread leave pid=%d",gettid());
 }
 
 bool CConnMgrInterface::run()
 {	
+	if (gCSendTakeTimeTT == 0)
+	{
+		gCSendTakeTimeTT = getTimeUnix();
+	}
 	misRun = true;
-	int res = cmsCreateThread(&mtid,routinue,this,true);
+	int res = cmsCreateThread(&mtid,routinue,this,false);
 	if (res == -1)
 	{
 		char date[128] = {0};
 		getTimeStr(date);
-		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 		return false;
 	}
 	return true;
+}
+
+void CConnMgrInterface::stop()
+{
+	logs->debug("##### CConnMgrInterface::stop begin #####");
+	misRun = false;
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
+	for (int i = 0; i < APP_ALL_MODULE_THREAD_NUM; i++)
+	{
+		mconnMgrArray[i]->stop();
+		delete mconnMgrArray[i];
+		mconnMgrArray[i] = NULL;
+	}
+	logs->debug("##### CConnMgrInterface::stop finish #####");
 }

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -29,12 +29,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <core/cms_lock.h>
 #include <core/cms_thread.h>
 #include <net/cms_tcp_conn.h>
+#include <net/cms_udp_conn.h>
 #include <common/cms_var.h>
+#include <app/cms_app_info.h>
 #include <map>
 #include <queue>
 using namespace std;
-
-#define NUM_OF_THE_CONN_MGR 16
 
 class CConnMgr:CDispatch
 {
@@ -76,14 +76,15 @@ public:
 	static void *routinue(void *param);
 	void thread();
 	bool run();
+	void stop();
 
 	void addOneConn(int fd,Conn *c);
 	void delOneConn(int fd);
-	Conn *createConn(char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
-		,ConnType connectType,RtmpType rtmpType);
+	Conn *createConn(HASH &hash,char *addr,string pullUrl,std::string pushUrl,std::string oriUrl,std::string strReferer
+		,ConnType connectType,RtmpType rtmpType,bool isTcp = true);
 private:
 	static CConnMgrInterface *minstance;
-	CConnMgr *mconnMgrArray[NUM_OF_THE_CONN_MGR];
+	CConnMgr *mconnMgrArray[APP_ALL_MODULE_THREAD_NUM];
 	bool			misRun;
 	cms_thread_t	mtid;
 };

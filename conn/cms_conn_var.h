@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define HTTP_VERSION						"HTTP/1.1"
 #define HTTP_HEADER_UPGRADE					"upgrade"
 #define HTTP_HEADER_WEBSOCKET				"websocket"
+#define HTTP_HEADER_WEBSOCKET_VERSION_NUM		"13"
 #define HTTP_HEADER_CONNECTION				"connection"
 #define HTTP_HEADER_SEC_WEBSOCKET_VER		"sec-websocket-version"
 #define HTTP_HEADER_SEC_WEBSOCKET_KEY		"sec-websocket-key"

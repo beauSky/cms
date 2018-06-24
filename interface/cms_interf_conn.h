@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __CMS_INTERFACE_CONN_H__
 #include <string>
 #include <common/cms_var.h>
+#include <interface/cms_read_write.h>
 
 class Conn
 {
@@ -39,12 +40,13 @@ public:
 	virtual std::string getPushUrl() = 0;
 	virtual std::string getRemoteIP() = 0;
 
-	virtual cms_net_ev    *evReadIO() = 0;
-	virtual cms_net_ev    *evWriteIO() = 0;
+	virtual cms_net_ev    *evReadIO(cms_net_ev *ev = NULL) = 0;
+	virtual cms_net_ev    *evWriteIO(cms_net_ev *ev = NULL) = 0;
 
 	virtual void down8upBytes() = 0;
-
 	virtual void reset() = 0;
+
+	virtual CReaderWriter *rwConn() = 0;
 
 	//http 使用
 	virtual int  doDecode() = 0;
@@ -52,6 +54,7 @@ public:
 	virtual int  doTransmission() = 0; //http server
 	virtual int  sendBefore(const char *data,int len) = 0;
 	virtual bool isFinish() = 0;
+	virtual bool isWebsocket() = 0;
 };
 
 #endif

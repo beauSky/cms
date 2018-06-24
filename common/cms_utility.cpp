@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -28,6 +28,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <enc/cms_sha1.h>
 #include <enc/cms_base64.h>
 #include <log/cms_log.h>
+#include <common/cms_time.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -38,8 +39,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <string.h>
 #include <errno.h>
 #include <algorithm>
+#ifdef _WIN32  
+#include <winsock2.h>  
+#include <time.h>  
+#else  
+#include <sys/time.h>  
+#endif 
 
 using namespace std;
+
+unsigned long long gUid = 0;
+CLock gUidLock;
 
 void urlEncode(const char *src, int nLenSrc, char *dest, int& nLenDest)
 {
@@ -284,15 +294,19 @@ unsigned long long htonll(unsigned long long val)
 }
 
 unsigned long getTickCount(){
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsMilSecond();
+#else
 	int res;
 	struct timespec sNow;
 	res = clock_gettime(CLOCK_MONOTONIC, &sNow);
-	if(res != 0)
+	if (res != 0)
 	{
 		printf("clock_gettime error: %d", errno);
 		return -1;
 	}
 	return sNow.tv_sec * 1000 + sNow.tv_nsec / 1000000; /* milliseconds */
+#endif	
 }
 
 /* return time string */
@@ -306,15 +320,54 @@ int getTimeStr(char *dstBuf)
 		st.wMinute, st.wSecond, st.wMilliseconds);
 	return st.wDay;
 #else /* posix */
+#ifdef _CMS_APP_USE_TIME_
+	char *ptr = getCmsTimeStr();
+	int day = getCmsDay();
+	memcpy(dstBuf, ptr, strlen(ptr));
+	sprintf(dstBuf+strlen(dstBuf), ".%03llu ", getCmsMilSecond() % 1000);
+	return day;
+#else
 	time_t t;
 	struct tm st;
 	t = time(NULL);
 	localtime_r(&t, &st);
-	sprintf(dstBuf," %04d-%02d-%02d %02d:%02d:%02d.%03lu ",
+	sprintf(dstBuf, " %04d-%02d-%02d %02d:%02d:%02d.%03llu ",
 		st.tm_year + 1900, st.tm_mon + 1, st.tm_wday, st.tm_hour,
-		st.tm_min, st.tm_sec, getTickCount()%1000);
+		st.tm_min, st.tm_sec, getMilSeconds() % 1000);
 	return st.tm_wday;
+#endif	
 #endif /* posix end */
+}
+
+unsigned long long getMilSeconds()
+{
+#ifdef _WIN32  
+	struct timeval tv;
+	time_t clock;
+	struct tm tm;
+	SYSTEMTIME wtm;
+
+	GetLocalTime(&wtm);
+	tm.tm_year = wtm.wYear - 1900;
+	tm.tm_mon = wtm.wMonth - 1;
+	tm.tm_mday = wtm.wDay;
+	tm.tm_hour = wtm.wHour;
+	tm.tm_min = wtm.wMinute;
+	tm.tm_sec = wtm.wSecond;
+	tm.tm_isdst = -1;
+	clock = mktime(&tm);
+	tv.tv_sec = clock;
+	tv.tv_usec = wtm.wMilliseconds * 1000;
+	return ((unsigned long long)tv.tv_sec * 1000 + (unsigned long long)tv.tv_usec / 1000);
+#else 
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsMilSecond();
+#else
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return ((unsigned long long)tv.tv_sec * 1000 + (unsigned long long)tv.tv_usec / 1000);
+#endif	
+#endif  
 }
 
 long long getTimeUnix()
@@ -326,13 +379,16 @@ long long getTimeUnix()
 	 */
 	return GetTickCount(); /* milliseconds */
 #else /* posix */
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsUnixTime();
+#else
 	/*int res;
 	struct timespec sNow;
 	res = clock_gettime(CLOCK_MONOTONIC, &sNow);
 	if(res != 0)
 	{
-		// error 
-		return 0;
+	// error
+	return 0;
 	}
 	long long uptime = sNow.tv_sec;
 	uptime = uptime*1000;
@@ -340,26 +396,51 @@ long long getTimeUnix()
 	return uptime; */
 	long long tt = (long long)time(NULL);
 	return tt;
+#endif		
 #endif /* posix end */
+}
+
+long long getNsTime()
+{
+	timespec ts = {0,0};
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return ts.tv_nsec;
 }
 
 int getTimeDay()
 {
+#ifdef _CMS_APP_USE_TIME_
+	return getCmsDay();
+#else
 	time_t t;
 	struct tm st;
 	t = time(NULL);
 	localtime_r(&t, &st);
 	return st.tm_wday;
+#endif	
 }
 
 void getDateTime(char* szDTime)
 {
+#ifdef _CMS_APP_USE_TIME_
+	char *ptr = getCmsDayTime();
+	memcpy(szDTime, ptr, strlen(ptr));
+#else
 	time_t t;
 	struct tm st;
 	t = time(NULL);
 	localtime_r(&t, &st);
-	sprintf(szDTime,"%04d-%02d-%02d",
-		st.tm_year+1900,st.tm_mon+1, st.tm_mday);
+	sprintf(szDTime, "%04d-%02d-%02d",
+		st.tm_year + 1900, st.tm_mon + 1, st.tm_mday);
+#endif
+}
+
+void waitTime(int n)
+{
+	struct timeval delay;
+	delay.tv_sec = 0;
+	delay.tv_usec = n * 1000; // n ms
+	select(0, NULL, NULL, NULL, &delay);
 }
 
 int cmsMkdir(const char *dirname)
@@ -480,6 +561,7 @@ void ipInt2ipStr(unsigned long iIp,char* szIP)
 
 std::string readMajorUrl(std::string strUrl) 
 {
+	strUrl = beforeMajorHashUrl(strUrl);
 	size_t pos = strUrl.find("?");
 	if (pos != std::string::npos)
 	{
@@ -512,6 +594,7 @@ std::string readMajorUrl(std::string strUrl)
 
 std::string readHashUrl(std::string strUrl)
 {
+	strUrl = beforeHashUrl(strUrl);
 	size_t stPos = strUrl.find("?");
 	if (stPos != string::npos)
 	{
@@ -563,7 +646,7 @@ std::string readMainHost(std::string strHost)
 	size_t pos = com.find(".");
 	if (pos == string::npos)
 	{
-		logs->error("*** [readMainHost] host %s error ***\n",strHost.c_str());
+		logs->error("*** [readMainHost] host %s error ***",strHost.c_str());
 		return "";
 	}
 	while (pos != string::npos)
@@ -645,6 +728,11 @@ std::string parseSpeed8Mem(int64 speed,bool isSpeed)
 
 bool nonblocking(int fd)
 {
+	if (fd < 0)
+	{
+		//udp自定义的socket
+		return true;
+	}
 	int opts;
 	opts = fcntl(fd, F_GETFL);
 	if (opts < 0)
@@ -803,48 +891,90 @@ void printTakeTime(std::map<unsigned long,unsigned long> &mapSendTakeTime,unsign
 		{
 			if (it->first == 1)
 			{
-				logs->debug("*** %s <0-1> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <0-1> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 2)
 			{
-				logs->debug("*** %s <2> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <2> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 3)
 			{
-				logs->debug("*** %s <3> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <3> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 4)
 			{
-				logs->debug("*** %s <4> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <4> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 5)
 			{
-				logs->debug("*** %s <5> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <5> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 10)
 			{
-				logs->debug("*** %s <5-10> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <5-10> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 20)
 			{
-				logs->debug("*** %s <10-20> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <10-20> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 30)
 			{
-				logs->debug("*** %s <20-30> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <20-30> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 50)
 			{
-				logs->debug("*** %s <30-50> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <30-50> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 100)
 			{
-				logs->debug("*** %s <50-100> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <50-100> take times %lu ***",str,it->second);
 			}
 			else if (it->first == 0)
 			{
-				logs->debug("*** %s <100-.> take times %lu ***\n",str,it->second);
+				logs->debug("*** %s <100-.> take times %lu ***",str,it->second);
 			}
 		}
 	}
 }
+
+std::string beforeHashUrl(std::string url)
+{
+	//目前不需要特殊处理
+	return url;
+}
+
+std::string beforeMajorHashUrl(std::string url)
+{
+	//目前不需要特殊处理
+	return url;
+}
+
+unsigned int hash2Idx(HASH &hash)
+{
+	unsigned int *puint = (unsigned int*)hash.data;
+	unsigned int idx = *puint;
+	return idx;
+}
+
+unsigned long long getVid()
+{
+	unsigned long long uid;
+	gUidLock.Lock();
+	if (gUid == 0)
+	{
+		gUid++;
+	}
+	uid = gUid++;
+	gUidLock.Unlock();
+	return uid;
+}
+
+long long MathAbs(long long value)
+{
+	if (value < 0)
+	{
+		return 0 - value;
+	}
+	return value;
+}
+

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
 #include <config/cms_config.h>
+#include <app/cms_app_info.h>
 
 CSSL::CSSL(int fd,std::string remoteAddr,bool isClient)
 {
@@ -79,7 +80,7 @@ bool CSSL::run()
 				mremoteAddr.c_str(),s2n_strerror(s2n_errno, "EN"));
 			return false;
 		}
-		if (s2n_set_server_name(ms2nConn, "cms server") < 0) 
+		if (s2n_set_server_name(ms2nConn, APP_NAME) < 0) 
 		{
 			logs->error("***** %s [CSSL::run] error setting server name: '%s' *****",
 				mremoteAddr.c_str(),s2n_strerror(s2n_errno, "EN"));

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -26,10 +26,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
 #include <conn/cms_conn_var.h>
+#include <common/cms_char_int.h>
 #include <ev/cms_ev.h>
 #include <sstream>
 #include <assert.h>
 
+#define WebSocketFirst2Byte 2
+#define WebSocketByte2		2
+#define WebSocketByte4		4
+#define WebSocketByte8		8
+#define WebSocketClose		8
 #define mapStrStrIterator std::map<std::string,std::string>::iterator 
 
 bool parseHttpHeader(const char *buf,int len,map<string,string> &mapKeyValue)
@@ -215,6 +221,16 @@ std::string	Request::getHeader(std::string key)
 {
 	mapStrStrIterator it = mmapHeader.find(key);
 	if (it != mmapHeader.end())
+	{
+		return it->second;
+	}
+	return "";
+}
+
+std::string	Request::getHttpParam(std::string key)
+{
+	mapStrStrIterator it = mmapParam.find(key);
+	if (it != mmapParam.end())
 	{
 		return it->second;
 	}
@@ -450,6 +466,13 @@ CHttp::CHttp(Conn *super,CBufferReader *rd,
 	misReadChunkedLen = false;
 	mbyteReadWrite = NULL;
 	mchunkedReadrRN = 0;
+	msProtocol = "http-flv";
+	mwebsocketLen = 0;
+	mwebsocketIsMask = false;
+	mwebsocketMask[0] = 0;
+	mwebsocketMask[1] = 0;
+	mwebsocketMask[2] = 0;
+	mwebsocketMask[3] = 0;
 }
 
 CHttp::~CHttp()
@@ -527,8 +550,7 @@ int CHttp::want2Read(bool isTimeout)
 			ret = mssl->read(&p,len);
 			if (ret < 0)
 			{
-				ret = -1;
-				break;
+				return CMS_ERROR;
 			}
 			else if (ret == 0)
 			{
@@ -543,8 +565,7 @@ int CHttp::want2Read(bool isTimeout)
 			{
 				logs->error("%s [CHttp::want2Read] %s http header read one byte fail,errno=%d,strerrno=%s ***",
 					mremoteAddr.c_str(),moriUrl.c_str(),mrdBuff->errnos(),mrdBuff->errnoCode());
-				ret = -1;
-				break;
+				return CMS_ERROR;
 			}
 			if (mrdBuff->size() < 1)
 			{
@@ -594,7 +615,7 @@ int CHttp::want2Read(bool isTimeout)
 				{
 					logs->error("***** %s [CHttp::want2Read] %s parseHeader fail *****", 
 						mremoteAddr.c_str(),moriUrl.c_str());
-					ret = -1;
+					return CMS_ERROR;
 				}
 			}
 			else
@@ -608,13 +629,159 @@ int CHttp::want2Read(bool isTimeout)
 				{
 					logs->error("***** %s [CHttp::want2Read] %s parseHeader fail *****", 
 						mremoteAddr.c_str(),moriUrl.c_str());
-					ret = -1;
+					return CMS_ERROR;
 				}
 				moriUrl = mrequest->getUrl();
 			}
 		}		
 	}
-	if (ret != -1 && misReadHeader)
+	if (msuper->isWebsocket())
+	{
+		//websocket recv
+		logs->info(" %s [CHttp::want2Read] %s this is websocket.",
+			mremoteAddr.c_str(), moriUrl.c_str());
+		do 
+		{
+			if (mwebsocketLen == 0)
+			{
+				/*
+				WebSocket数据帧结构如下图所示：
+				0                   1                   2                   3
+				0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				+-+-+-+-+-------+-+-------------+-------------------------------+
+				|F|R|R|R| opcode|M| Payload len |    Extended payload length    |
+				|I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+				|N|V|V|V|       |S|             |   (if payload len==126/127)   |
+				| |1|2|3|       |K|             |                               |
+				+-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+				|     Extended payload length continued, if payload len == 127  |
+				+ - - - - - - - - - - - - - - - +-------------------------------+
+				|                               |Masking-key, if MASK set to 1  |
+				+-------------------------------+-------------------------------+
+				| Masking-key (continued)       |          Payload Data         |
+				+-------------------------------- - - - - - - - - - - - - - - - +
+				:                     Payload Data continued ...                :
+				+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
+				|                     Payload Data continued ...                |
+				+---------------------------------------------------------------+
+				*/
+				if (mrdBuff->size() < WebSocketFirst2Byte && mrdBuff->grow(WebSocketFirst2Byte - mrdBuff->size()) == CMS_ERROR)
+				{
+					logs->error("%s [CHttp::want2Read] websocket %s http read 2 byte fail,errno=%d,strerrno=%s ***",
+						mremoteAddr.c_str(), moriUrl.c_str(), mrdBuff->errnos(), mrdBuff->errnoCode());
+					return CMS_ERROR;
+				}
+				if (mrdBuff->size() < WebSocketFirst2Byte)
+				{
+					ret = 0;
+					break;
+				}
+				unsigned char *b2 = (unsigned char *)mrdBuff->peek(WebSocketFirst2Byte);
+				//char fin = b2[0] << 7 >> 7;
+				logs->info(" %s [CHttp::want2Read] %s ===== %x.",
+					mremoteAddr.c_str(), moriUrl.c_str(), b2[0]);
+				char opcode = b2[0] >> 4;
+				char mask = b2[1] >> 7;
+				char paylen = b2[1] << 1 >> 1;
+				int64 n = 0;
+				int skipBytes = 0;
+				if (opcode == WebSocketClose)
+				{
+					logs->error("%s [CHttp::want2Read] websocket %s recv EOF ***",
+						mremoteAddr.c_str(), moriUrl.c_str());
+					return CMS_ERROR;
+				}
+				if (paylen < 126)
+				{
+					n = int(paylen);
+					skipBytes = WebSocketFirst2Byte;
+				}
+				else if (paylen == 126)
+				{
+					if (mrdBuff->size() < WebSocketFirst2Byte + WebSocketByte2 && mrdBuff->grow(WebSocketFirst2Byte + WebSocketByte2 - mrdBuff->size()) == CMS_ERROR)
+					{
+						logs->error("%s [CHttp::want2Read] websocket %s http read 4 byte fail,errno=%d,strerrno=%s ***",
+							mremoteAddr.c_str(), moriUrl.c_str(), mrdBuff->errnos(), mrdBuff->errnoCode());
+						return CMS_ERROR;
+					}
+					if (mrdBuff->size() < WebSocketFirst2Byte + WebSocketByte2)
+					{
+						ret = 0;
+						break;
+					}
+					char *b4 = mrdBuff->peek(WebSocketFirst2Byte + WebSocketByte2);
+					n = bigInt16(b4 + WebSocketFirst2Byte);
+					skipBytes = WebSocketFirst2Byte + WebSocketByte2;
+				}
+				else
+				{
+					if (mrdBuff->size() < WebSocketFirst2Byte + WebSocketByte8 && mrdBuff->grow(WebSocketFirst2Byte + WebSocketByte8 - mrdBuff->size()) == CMS_ERROR)
+					{
+						logs->error("%s [CHttp::want2Read] websocket %s http read 8 byte fail,errno=%d,strerrno=%s ***",
+							mremoteAddr.c_str(), moriUrl.c_str(), mrdBuff->errnos(), mrdBuff->errnoCode());
+						return CMS_ERROR;
+					}
+					if (mrdBuff->size() < WebSocketFirst2Byte + WebSocketByte8)
+					{
+						ret = 0;
+						break;
+					}
+					char *b8 = mrdBuff->peek(WebSocketFirst2Byte + WebSocketByte8);
+					n = bigInt64(b8 + WebSocketFirst2Byte);
+					skipBytes = WebSocketFirst2Byte + WebSocketByte8;
+				}
+
+				if (mask == 1)
+				{
+					mwebsocketIsMask = true;
+					if (mrdBuff->size() < skipBytes + WebSocketByte4 && mrdBuff->grow(skipBytes + WebSocketByte4 - mrdBuff->size()) == CMS_ERROR)
+					{
+						logs->error("%s [CHttp::want2Read] websocket %s http read mask fail,errno=%d,strerrno=%s ***",
+							mremoteAddr.c_str(), moriUrl.c_str(), mrdBuff->errnos(), mrdBuff->errnoCode());
+						return CMS_ERROR;
+					}
+					if (mrdBuff->size() < skipBytes + WebSocketByte4)
+					{
+						ret = 0;
+						break;
+					}
+					char *b4 = mrdBuff->peek(skipBytes + WebSocketByte4);
+					mwebsocketMask[0] = b4[skipBytes + 0];
+					mwebsocketMask[1] = b4[skipBytes + 1];
+					mwebsocketMask[2] = b4[skipBytes + 2];
+					mwebsocketMask[3] = b4[skipBytes + 3];
+					skipBytes += WebSocketByte4;
+				}
+				mwebsocketLen = n;
+				mrdBuff->skip(skipBytes);
+			}
+
+			if (mwebsocketIsMask)
+			{
+				if (mrdBuff->size() < mwebsocketLen && mrdBuff->grow(mwebsocketLen - mrdBuff->size()) == CMS_ERROR)
+				{
+					logs->error("%s [CHttp::want2Read] websocket %s http read playload fail,errno=%d,strerrno=%s ***",
+						mremoteAddr.c_str(), moriUrl.c_str(), mrdBuff->errnos(), mrdBuff->errnoCode());
+					return CMS_ERROR;
+				}
+				if (mrdBuff->size() < mwebsocketLen)
+				{
+					ret = 0;
+					break;
+				}
+				char *bytes = mrdBuff->peek(mwebsocketLen);
+				if (mwebsocketIsMask)
+				{
+					for (int i = 0; i < mwebsocketLen; i++)
+					{
+						bytes[i] = bytes[i] ^ mwebsocketMask[i % 4];
+					}
+				}
+				mrdBuff->skip(mwebsocketLen);
+			}
+		} while (0);
+	}
+	if (misReadHeader)
 	{
 		ret = msuper->doDecode();
 		if (ret == CMS_ERROR)
@@ -1037,6 +1204,16 @@ void CHttp::syncIO()
 		msuper->evWriteIO();
 		doWriteTimeout();
 	}
+}
+
+bool CHttp::isCmsConnection()
+{
+	return false;
+}
+
+std::string CHttp::protocol()
+{
+	return msProtocol;
 }
 
 void CHttp::setChunked()

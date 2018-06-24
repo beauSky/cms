@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -30,13 +30,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <strategy/cms_fast_bit_rate.h>
 #include <strategy/cms_duration_timestamp.h>
 #include <strategy/cms_first_play.h>
+#include <strategy/cms_jump_last_x_seconds.h>
 #include <string>
 
 class CRtmpProtocol;
 class CFlvTransmission
 {
 public:
-	CFlvTransmission(CProtocol *protocol);
+	CFlvTransmission(CProtocol *protocol,bool isPushTask = false);
 	~CFlvTransmission();
 	void setHash(uint32 hashIdx,HASH &hash);
 	void setWaterMarkHash(uint32 hashIdx,HASH &hash);
@@ -57,16 +58,22 @@ private:
 	CFastBitRate		*mfastBitRate;
 	CDurationTimestamp	*mdurationtt;
 	CFirstPlay			*mfirstPlay;
+	CJumpLastXSeconds	*mjumpLastXSeconds;
 	//发送直播流相关
 	int64			mllMetaDataIdx;
 	int64			mllFirstVideoIdx;
 	int64			mllFirstAudioIdx;
 	int64			mllTransIdx;
+	uint64			mullTransUid;
 	bool			misChangeFirstVideo;
 	int				mchangeFristVideoTimes;
+	bool			misTaskRestart;
 
 	int64			mcacheTT; //缓存时间 ms
 	uint32			muiKeyFrameDistance;
 	int32			msliceFrameRate;
+
+	bool			misPushTask;
+	bool			misRestart8AdjustTimestamp; //流重启了 计算保证时间戳递增标志
 };
 #endif

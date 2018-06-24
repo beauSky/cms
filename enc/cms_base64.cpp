@@ -138,7 +138,7 @@ int Base64::Encode1(char *inData,int dataLength,char *outCode)
 	{ 
 		'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
 		'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
-		'0','1','2','3','4','5','6','7','8','9',CHAR_63,CHAR_64
+		'0','1','2','3','4','5','6','7','8','9',CHAR_63_1,CHAR_64_1
 	};
 
 	// mask - first six bits
@@ -328,9 +328,9 @@ int Base64::Decode1(char *inCode,
 			val = x - 'a' + 'Z' - 'A' + 1;
 		else if( x >= '0' && x <= '9' )
 			val = x - '0' + ( 'Z' - 'A' + 1 ) * 2;
-		else if( x == CHAR_63 )
+		else if( x == CHAR_63_1)
 			val = 62;
-		else if( x == CHAR_64 )
+		else if( x == CHAR_64_1)
 			val = 63;
 
 		// padding chars are not decoded and written to output buffer

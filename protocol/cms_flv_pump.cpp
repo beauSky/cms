@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <log/cms_log.h>
 #include <common/cms_utility.h>
 #include <protocol/cms_flv.h>
+#include <decode/decode.h>
 
 CFlvPump::CFlvPump(CStreamInfo *super,HASH &hash,uint32 &hashIdx,std::string remoteAddr,std::string modeName,std::string url)
 {
@@ -66,10 +67,19 @@ CFlvPump::~CFlvPump()
 
 int	CFlvPump::decodeMetaData(char *data,int len,bool &isChangeMediaInfo)
 {
+	char *saveData = new char[len];
+	memcpy(saveData, data, len);
 	amf0::Amf0Block *block = NULL;
-	block = amf0::amf0Parse(data,len);	
+	block = amf0::amf0Parse(data,len);
+	if (block == NULL)
+	{
+		logs->error("***** %s [CFlvPump::decodeMetaData] %s parse metaData fail *****",
+			mremoteAddr.c_str(),murl.c_str());
+		delete[] saveData;
+		return 0;
+	}
 	std::string strRtmpContent = amf0::amf0BlockDump(block);
-	logs->info("%s [CFlvPump::decodeMetaData] http %s received metaData: %s",
+	logs->info("%s [CFlvPump::decodeMetaData] %s received metaData: %s",
 		mremoteAddr.c_str(),murl.c_str(),strRtmpContent.c_str());
 	string strRtmpData = amf0::amf0Block2String(block);
 
@@ -115,7 +125,7 @@ int	CFlvPump::decodeMetaData(char *data,int len,bool &isChangeMediaInfo)
 	{
 		copy2Slice(s);
 	}
-	s->mData = data;
+	s->mData = saveData;
 	s->miDataLen = len;
 	s->mhHash = mhash;
 	s->misMetaData = true;
@@ -193,7 +203,23 @@ int CFlvPump::decodeVideo(char *data,int len,uint32 timestamp,bool &isChangeMedi
 			if (data[1] == 0x00)
 			{
 				dataType = DATA_TYPE_FIRST_VIDEO;
-				miVideoFrameRate = 30;
+				if (len > OFFSET_FIRST_VIDEO_FRAME)
+				{
+					int iVideoFrameRate = 0;
+					decodeVideoFrameRate(data + OFFSET_FIRST_VIDEO_FRAME, len - OFFSET_FIRST_VIDEO_FRAME, &iVideoFrameRate);
+					if (iVideoFrameRate > 0 && iVideoFrameRate < 100)
+					{
+						miVideoFrameRate = iVideoFrameRate;
+						logs->debug("%s [CFlvPump::decodeVideo] %s get video frame rate %d from first video ",
+							mremoteAddr.c_str(), murl.c_str(), miVideoFrameRate);
+					}
+					if (miWidth == 0 || miHeight == 0)
+					{
+						decodeWidthHeight(data + OFFSET_FIRST_VIDEO_FRAME, len - OFFSET_FIRST_VIDEO_FRAME, &miWidth, &miHeight);
+						logs->debug("%s [CFlvPump::decodeVideo] %s get width %d and height %d from first video ",
+							mremoteAddr.c_str(), murl.c_str(), miWidth, miHeight);
+					}
+				}
 				isChangeMediaInfo = true;
 			}
 			else if (data[1] == 0x01)

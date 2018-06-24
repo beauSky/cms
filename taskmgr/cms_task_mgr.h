@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -37,6 +37,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct CreateTaskPacket 
 {
+	HASH				hash;
 	std::string			pullUrl;
 	std::string			pushUrl;
 	std::string			oriUrl;
@@ -58,6 +59,7 @@ public:
 	static void *routinue(void *param);
 	void thread();
 	bool run();
+	void stop();
 
 	//拉流任务接口或者被推流
 	bool	pullTaskAdd(HASH &hash,Conn *conn);
@@ -74,7 +76,7 @@ public:
 	void    pushTaskStopAllByIP(std::string strIP);		//删除推流ip
 	bool	pushTaskIsExist(HASH &hash);
 	//异步创建任务
-	void	createTask(std::string pullUrl,std::string pushUrl,std::string oriUrl,
+	void	createTask(HASH &hash,std::string pullUrl,std::string pushUrl,std::string oriUrl,
 		std::string refer,int createAct,bool isHotPush,bool isPush2Cdn);
 	void	push(CreateTaskPacket *ctp);
 private:

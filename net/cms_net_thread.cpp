@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,7 +35,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 CNetThread::CNetThread()
 {
 	misRun = false;
-	mtid = -1;
+	mtid = 0;
 	mepfd = -1;
 	mcneNum = 0;
 	for (int i = 0; i < MAX_NET_THREAD_FD_NUM; i++)
@@ -80,7 +80,7 @@ void CNetThread::thread()
 				cne = getReadCne(epeventsRemote[i].data.fd);
 				if (cne == NULL)
 				{
-					//maybe has been deleted just now.
+					//可能刚刚被删除了
 					continue;
 				}
 				if (cne)
@@ -95,11 +95,14 @@ void CNetThread::thread()
 				cne = getWriteCne(epeventsRemote[i].data.fd);
 				if (cne == NULL)
 				{
-					//maybe has been deleted just now.
+					//可能刚刚被删除了
 					continue;
 				}
 				if (cne)
 				{
+					//char szTime[30] = { 0 };
+					//getTimeStr(szTime);
+					//printf(">>>>>>>>11111 %s CNetThread write event fd=%d\n", szTime, cne->mfd);
 					cne->mcallBack(cne,evs); //不能阻塞
 					atomicDec(cne); //++
 				}
@@ -140,8 +143,11 @@ bool CNetThread::run()
 
 void CNetThread::stop()
 {
+	logs->debug("##### CNetThread::stop begin #####");
 	misRun = false;
 	cmsWaitForThread(mtid,NULL);
+	mtid = 0;
+	logs->debug("##### CNetThread::stop finish #####");
 }
 
 int CNetThread::vectorIdx(int fd)

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <protocol/cms_flv.h>
 #include <common/cms_char_int.h>
 #include <static/cms_static_common.h>
+#include <app/cms_app_info.h>
 using namespace std;
 
 #define MapHashStreamIter map<HASH,StreamSlice *>::iterator
@@ -39,18 +40,38 @@ using namespace std;
 
 void atomicInc(Slice *s)
 {
-	__sync_add_and_fetch(&s->mionly,1);//当数据超时，且没人使用时，删除
+	if (s != NULL)
+	{
+		__sync_add_and_fetch(&s->mionly, 1);//当数据超时，且没人使用时，删除
+	}	
 }
 
 void atomicDec(Slice *s)
 {
-	if (__sync_sub_and_fetch(&s->mionly,1) == 0)//当数据超时，且没人使用时，删除
+	if (s != NULL)
 	{
-		if (s->mData)
+		if (__sync_sub_and_fetch(&s->mionly, 1) == 0)//当数据超时，且没人使用时，删除
 		{
-			delete[] s->mData;
+			if (s->mData)
+			{
+				delete[] s->mData;
+			}
+			delete s;
 		}
-		delete s;
+	}	
+}
+
+CAutoSlice::CAutoSlice(Slice *s)
+{
+	ms = s;
+}
+
+CAutoSlice::~CAutoSlice()
+{
+	if (ms)
+	{
+		atomicDec(ms);
+		ms = NULL;
 	}
 }
 
@@ -183,11 +204,15 @@ CFlvPool *CFlvPool::minstance = NULL;
 CFlvPool::CFlvPool()
 {
 	misRun = false;
+	for (int i = 0; i < APP_ALL_MODULE_THREAD_NUM; i++)
+	{
+		mtid[i] = 0;
+	}
 }
 
 CFlvPool::~CFlvPool()
 {
-	for (int i = 0; i < FLV_POOL_COUNT; i++)
+	for (int i = 0; i < APP_ALL_MODULE_THREAD_NUM; i++)
 	{
 		mqueueLock[i].Lock();
 		while (!mqueueSlice[i].empty())
@@ -291,7 +316,7 @@ void CFlvPool::thread(uint32 i)
 bool CFlvPool::run()
 {
 	misRun = true;
-	for (int i = 0; i < FLV_POOL_COUNT; i++)
+	for (int i = 0; i < APP_ALL_MODULE_THREAD_NUM; i++)
 	{
 		RoutinueParam *rp = new RoutinueParam;
 		rp->i = i;
@@ -301,7 +326,7 @@ bool CFlvPool::run()
 		{
 			char date[128] = {0};
 			getTimeStr(date);
-			logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+			logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 			return false;
 		}		
 	}
@@ -328,21 +353,36 @@ void CFlvPool::freeInstance()
 
 void CFlvPool::stop()
 {
+	logs->debug("##### CFlvPool::stop begin #####");
 	misRun = false;
-	cmsWaitForMultiThreads(FLV_POOL_COUNT,mtid);
+	for (int i = 0; i < APP_ALL_MODULE_THREAD_NUM; i++)
+	{
+		cmsWaitForThread(mtid[i], NULL);
+		mtid[i] = 0;
+	}
+	logs->debug("##### CFlvPool::stop finish #####");
 }
 
 uint32 CFlvPool::hashIdx(HASH &hash)
 {
 	uint32 i = bigUInt32((char *)hash.data);
-	return i % FLV_POOL_COUNT;
+	return i % APP_ALL_MODULE_THREAD_NUM;
 }
 
 void CFlvPool::push(uint32 i,Slice *s)
 {
-	mqueueLock[i].Lock();	
-	mqueueSlice[i].push(s);
-	mqueueLock[i].Unlock();
+	if (gcmsTestServer)
+	{
+		//作为压测服务 不需要保存数据
+		atomicInc(s);
+		atomicDec(s);
+	}
+	else
+	{
+		mqueueLock[i].Lock();
+		mqueueSlice[i].push(s);
+		mqueueLock[i].Unlock();
+	}
 }
 
 bool CFlvPool::pop(uint32 i,Slice **s)
@@ -357,6 +397,51 @@ bool CFlvPool::pop(uint32 i,Slice **s)
 	mqueueSlice[i].pop();
 	mqueueLock[i].Unlock();
 	return true;
+}
+
+bool CFlvPool::justJump2VideoLastXSecond(uint32 i, HASH &hash, uint32 &st, uint32 &ts, int64 &transIdx)
+{
+	transIdx = -1;
+	bool isSucc = false;
+	mhashSliceLock[i].RLock();
+	MapHashStreamIter iterM = mmapHashSlice[i].find(hash);
+	if (iterM != mmapHashSlice[i].end())
+	{
+		StreamSlice * ss = iterM->second;
+		ss->mLock.RLock();
+
+		size_t avSize = ss->mavSlice.size();
+		size_t vkSize = ss->mvKeyFrameIdx.size();
+		if (vkSize > 0 && avSize > 0)
+		{			
+			int64 minIdx = ss->mavSliceIdx.at(0);			
+			for (int ii = ((int)vkSize) - 1; ii >= 0; ii--)
+			{
+				int64 keyIdx = ss->mvKeyFrameIdx.at(ii);
+				Slice *s = ss->mavSlice.at(keyIdx - minIdx);
+				uint32 leftBuf = 0;
+				if (s->miVideoFrameRate > 0 && s->miAudioFrameRate > 0 )
+				{
+					int avFrameRate = s->miVideoFrameRate + s->miAudioFrameRate;
+					leftBuf = (uint32)((int)((int64)avSize - (keyIdx - minIdx)) * 1000 / avFrameRate);
+				}
+				if ((leftBuf > 0 && leftBuf > DropVideoMinSeconds && s->muiTimestamp <= st - DropVideoMinSeconds) ||
+					(leftBuf == 0 && s->muiTimestamp <= st - DropVideoMinSeconds))
+				{ //可能卡顿导致 时间戳满足3秒 但帧数不满足 需要判断同时满足
+					isSucc = true;
+					transIdx = keyIdx - 1;
+					ts = s->muiTimestamp;
+					logs->debug(">>>>>>hsc justJump2VideoLastXSecond read last task %s seek keyframe,idx=%lld, st=%u, s->muiTimestamp=%u.",
+						s->mstrUrl.c_str(), transIdx, st, s->muiTimestamp);
+					break;
+				}
+			}
+		}
+
+		ss->mLock.UnRLock();
+	}
+	mhashSliceLock[i].UnRLock();
+	return isSucc;
 }
 
 int  CFlvPool::readRirstVideoAudioSlice(uint32 i,HASH &hash,Slice **s,bool isVideo)
@@ -387,17 +472,44 @@ int  CFlvPool::readRirstVideoAudioSlice(uint32 i,HASH &hash,Slice **s,bool isVid
 	return ret;
 }
 
-int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNum,bool isTrans)
+int  CFlvPool::readSlice(uint32 i, HASH &hash, int64 &llIdx, Slice **s, int &sliceNum, bool isTrans, int64 llMetaDataIdx, int64 llFirstVideoIdx, int64 llFirstAudioIdx, 
+	bool &isExist,	bool &isTaskRestart, bool isPublishTask, bool &isMetaDataChanged, bool &isFirstVideoAudioChanged, uint64 &transUid)
 {
 	*s = NULL;
 	int ret = FlvPoolCodeError;
 	mhashSliceLock[i].RLock();
 	MapHashStreamIter iterM = mmapHashSlice[i].find(hash);
 	if (iterM != mmapHashSlice[i].end())
-	{
+	{	
 		ret = FlvPoolCodeOK;
 		StreamSlice *ss = iterM->second;
 		ss->mLock.RLock();
+		
+		isExist = true;
+		//check metaData
+		isPublishTask = ss->misPushTask;
+		if (ss->misHaveMetaData && (llMetaDataIdx == -1 || ss->mllMetaDataIdx == llIdx + 1))
+		{
+			isMetaDataChanged = true;
+		}
+		//check metaData end
+		//check first video audio changed
+		if (ss->mfirstVideoSlice)
+		{
+			if (llFirstVideoIdx == -1 || ss->mllFirstVideoIdx == llIdx + 1)
+			{
+				isFirstVideoAudioChanged = true;
+			}
+		}
+		if (ss->mfirstAudioSlice)
+		{
+			if (llFirstAudioIdx == -1 || ss->mllFirstAudioIdx == llIdx + 1)
+			{
+				isFirstVideoAudioChanged = true;
+			}
+		}
+		//check first video audio changed end
+
 		do 
 		{
 			int64 duration = 0;
@@ -415,7 +527,7 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 				if (llIdx+1 > maxIdx)
 				{
 					ret = FlvPoolCodeNoData;
-					if (llIdx > maxIdx+250)
+					if (transUid != 0 && transUid != ss->muid)
 					{
 						//任务重启过
 						logs->info(">>>>> [CFlvPool::readSlice] readSlice %s maybe has been restart.",ss->mstrUrl.c_str());
@@ -548,6 +660,10 @@ int  CFlvPool::readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNu
 			atomicInc(*s); //当数据超时，且没人使用时，删除
 		}
 		ss->mLock.UnRLock();
+	}
+	else
+	{
+		logs->info(">>>>> [CFlvPool::readSlice] not find task.");
 	}
 	mhashSliceLock[i].UnRLock();
 	return ret;
@@ -988,7 +1104,7 @@ std::string CFlvPool::readCodeSuffix(uint32 i,HASH &hash)
 	return codeSuffix;
 }
 
-bool CFlvPool::seekKeyFrame(uint32 i,HASH &hash,uint32 &tt,int64 &transIdx)
+bool CFlvPool::seekKeyFrame(uint32 i,HASH &hash,uint32 &st,int64 &transIdx)
 {
 	transIdx = -1;
 	bool isSucc = false;
@@ -1007,7 +1123,7 @@ bool CFlvPool::seekKeyFrame(uint32 i,HASH &hash,uint32 &tt,int64 &transIdx)
 			int64 keyIdx = ss->mvKeyFrameIdx.at(vkSize-1);
 			bool isReadLast = false;
 			Slice *s = ss->mavSlice.at(keyIdx-minIdx);
-			if (s->muiTimestamp <= tt)
+			if (s->muiTimestamp <= st)
 			{
 				isSucc = true;
 				transIdx = keyIdx-1;
@@ -1019,7 +1135,7 @@ bool CFlvPool::seekKeyFrame(uint32 i,HASH &hash,uint32 &tt,int64 &transIdx)
 				{
 					int64 keyIdx = ss->mvKeyFrameIdx.at(i);
 					Slice *s = ss->mavSlice.at(keyIdx-minIdx);
-					if (s->muiTimestamp >= tt)
+					if (s->muiTimestamp >= st)
 					{
 						isSucc = true;
 						transIdx = keyIdx-1;
@@ -1052,7 +1168,7 @@ void CFlvPool::handleSlice(uint32 i,Slice *s)
 			return;
 		}
 		ss = newStreamSlice();
-
+		ss->muid = getVid();
 		ss->miNotPlayTimeout = s->miNotPlayTimeout;
 		if (ss->miNotPlayTimeout <= 0)
 		{

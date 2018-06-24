@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -57,6 +57,9 @@ private:
 	int32 mtotalReadBytes;
 	CReaderWriter *mrd;
 	struct s2n_connection	*ms2nConn;
+
+	//test
+	int mkcpReadLen;
 };
 
 class CBufferWriter

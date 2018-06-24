@@ -32,16 +32,20 @@ class Base64
 {
 
 public:
-
+	//Standard base64
 	// 63rd char used for Base64 code
-	static const char CHAR_63 = '*';
-
+	static const char CHAR_63 = '+';
 	// 64th char used for Base64 code
-	static const char CHAR_64 = '-';
-
+	static const char CHAR_64 = '/';
 	// Char used for padding
 	static const char CHAR_PAD = '=';
 
+	//not Standard base64
+	// 63rd char used for Base64 code
+	static const char CHAR_63_1 = '*';
+	// 64th char used for Base64 code
+	static const char CHAR_64_1 = '*';
+	// Char used for padding
 	static const char CHAR_PAD1 = '[';
 
 public:

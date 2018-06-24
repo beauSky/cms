@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -33,11 +33,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <net/cms_net_mgr.h>
 #include <enc/cms_sha1.h>
 #include <ts/cms_hls_mgr.h>
+#include <app/cms_app_info.h>
 #include <assert.h>
 #include <stdlib.h>
 using namespace std;
 
-CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std::string pushUrl)
+CConnRtmp::CConnRtmp(HASH &hash,RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std::string pushUrl)
 {
 	char remote[23] = {0};
 	rw->remoteAddr(remote,sizeof(remote));
@@ -74,7 +75,7 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	misPushFlv = false;
 	misDown8upBytes = false;
 	misAddConn = false;
-	mflvTrans = new CFlvTransmission(mrtmp);
+	mflvTrans = new CFlvTransmission(mrtmp, mrtmpType == RtmpClient2Publish);
 	misStop = false;
 	mjustTickOld = 0;
 	mjustTick = 0;
@@ -89,6 +90,11 @@ CConnRtmp::CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std
 	mxSecdownBytes = 0;
 	mxSecUpBytes = 0;
 	mxSecTick = 0;
+	//要么是推流任务 要么是拉流任务
+	if (gcmsTestServer)
+	{
+		mHash = hash;
+	}
 
 	if (!pullUrl.empty())
 	{
@@ -112,14 +118,20 @@ CConnRtmp::~CConnRtmp()
 		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 	if (mwatcherReadIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherReadIO);
+		if (mrw->netType() == NetTcp || (mrw->netType() == NetUdp && mrw->fd() > 0))//listen 返回的 udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherReadIO);
+		}
 		freeCmsNetEv(mwatcherReadIO);
 		logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop read io ",
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 	}
 	if (mwatcherWriteIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		if (mrw->netType() == NetTcp || (mrw->netType() == NetUdp && mrw->fd() > 0))//listen 返回的 udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		}		
 		freeCmsNetEv(mwatcherWriteIO);
 		logs->debug("######### %s [CConnRtmp::~CConnRtmp] %s rtmp %s stop write io ",
 			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
@@ -133,7 +145,11 @@ CConnRtmp::~CConnRtmp()
 		delete mflvPump;
 	}
 	mrw->close();
-	delete mrw;
+	if (mrw->netType() == NetTcp)//udp 不调用
+	{
+		//udp 连接由udp模块自身管理 不需要也不能由外部释放
+		delete mrw;
+	}
 }
 
 int CConnRtmp::doit()
@@ -153,7 +169,7 @@ int CConnRtmp::doit()
 	}
 	else if (mrtmpType == RtmpClient2Play)
 	{
-		if (!CTaskMgr::instance()->pullTaskAdd(mpushHash,this))
+		if (/*!CTaskMgr::instance()->pullTaskAdd(mHash,this)*/setPlayTask() != CMS_OK)
 		{
 			logs->warn("######### %s [CConnRtmp::doit] %s rtmp %s pull task is exist %s ",
 				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),mstrPushUrl.c_str());
@@ -170,8 +186,8 @@ int CConnRtmp::stop(std::string reason)
 	//主动断开时,会调用,reason 是调用原因
 	if (reason.empty())
 	{
-		logs->debug("%s [CConnRtmp::stop] %s rtmp %s has been stop ",
-			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
+		logs->debug("%s [CConnRtmp::stop] %s rtmp %s has been stop,is push task %s ",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(), misPush?"true":"false");
 		if (misPushFlv)
 		{
 			mflvPump->stop();
@@ -183,6 +199,7 @@ int CConnRtmp::stop(std::string reason)
 		if (misPush)
 		{
 			CTaskMgr::instance()->pushTaskDel(mpushHash);
+			tryCreatePushTask(true);
 		}
 		if (misDown8upBytes)
 		{
@@ -259,28 +276,29 @@ int CConnRtmp::handleEv(FdEvents *fe)
 
 int CConnRtmp::doRead(bool isTimeout)
 {
-	//logs->debug("%s [CConnRtmp::doRead] rtmp %s doRead",
-	//	mremoteAddr.c_str(),mrtmp->getRtmpType().c_str());
+// 	logs->debug("%s [CConnRtmp::doRead] rtmp %s doRead",
+// 		mremoteAddr.c_str(),mrtmp->getRtmpType().c_str());
 	if (isTimeout)
 	{
 		int64 tn = getTimeUnix();
-		if (tn - mtimeoutTick > 30)
+		if (tn - mtimeoutTick > 10)
 		{
 			logs->error("%s [CConnRtmp::doRead] %s rtmp %s is timeout ***",
 				mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str());
 			return CMS_ERROR;
 		}
-	}
-	return mrtmp->want2Read(isTimeout);
+	}	
+
+	int ret = mrtmp->want2Read(isTimeout);
+
+	return ret;
 }
 
 int CConnRtmp::doWrite(bool isTimeout)
 {
-	//logs->debug("%s [CConnRtmp::doWrite] rtmp %s doWrite",
-	//	mremoteAddr.c_str(),mrtmp->getRtmpType().c_str());
 	mjustTick++;
 	int ret = mrtmp->want2Write(isTimeout);
-	mjustTick--;
+	mjustTick--;	
 	return ret;
 }
 
@@ -297,24 +315,49 @@ void CConnRtmp::justTick()
 	}
 }
 
-cms_net_ev *CConnRtmp::evReadIO()
+cms_net_ev *CConnRtmp::evReadIO(cms_net_ev *ev)
 {
 	if (mwatcherReadIO == NULL)
 	{
-		mwatcherReadIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
-		CNetMgr::instance()->cneStart(mwatcherReadIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherReadIO = ev;
+		}
+		else
+		{			
+			logs->debug("%s [CConnRtmp::evReadIO] rtmp %s set read event %d",
+				mremoteAddr.c_str(),mrtmp->getRtmpType().c_str(),mrw->fd());
+
+			mwatcherReadIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
+			CNetMgr::instance()->cneStart(mwatcherReadIO);
+		}
 	}
 	return mwatcherReadIO;
 }
 
-cms_net_ev *CConnRtmp::evWriteIO()
+cms_net_ev *CConnRtmp::evWriteIO(cms_net_ev *ev)
 {
 	if (mwatcherWriteIO == NULL)
 	{
-		mwatcherWriteIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
-		CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherWriteIO = ev;
+			//if (mrw->netType() == NetUdp)
+			//{
+			//	writeEV(mwatcherWriteIO,EventWrite); //对于udp首次需要投递写事件,理论上不会进来
+			//}
+		}
+		else
+		{			
+			mwatcherWriteIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
+			CNetMgr::instance()->cneStart(mwatcherWriteIO);			
+		}
 	}
 	return mwatcherWriteIO;
 }
@@ -446,7 +489,7 @@ int  CConnRtmp::decodeVideo(RtmpMessage *msg,bool &isSave)
 		isSave = true;
 		misPushFlv = true;
 	}
-	if (!misCreateHls)
+	if (!misCreateHls && false)
 	{
 		misCreateHls = true;
 		LinkUrl linkUrl;
@@ -485,7 +528,7 @@ int  CConnRtmp::decodeAudio(RtmpMessage *msg,bool &isSave)
 		misPushFlv = true;
 	}
 
-	if (!misCreateHls)
+	if (!misCreateHls && false)
 	{
 		misCreateHls = true;
 		LinkUrl linkUrl;
@@ -601,10 +644,7 @@ int CConnRtmp::decodeMetaData(amf0::Amf0Block *block)
 	{
 		misPushFlv = true;
 	}
-	else
-	{
-		delete[] data;
-	}
+	delete[] data;
 	return CMS_OK;
 }
 
@@ -639,10 +679,7 @@ int CConnRtmp::decodeSetDataFrame(amf0::Amf0Block *block)
 	{
 		misPushFlv = true;
 	}
-	else
-	{
-		delete[] dm;
-	}
+	delete[] dm;
 	return CMS_OK;
 }
 
@@ -657,13 +694,24 @@ int CConnRtmp::doTransmission()
 	}
 	if (isSendData)
 	{
+		//logs->debug("%s [CConnRtmp::doTransmission] %s rtmp do send data",
+		//	mremoteAddr.c_str(), murl.c_str());
 		mtimeoutTick = getTimeUnix();
+	}
+	else
+	{
+		//logs->debug("%s [CConnRtmp::doTransmission] %s rtmp not send data",
+		//	mremoteAddr.c_str(), murl.c_str());
 	}
 	return ret;
 }
 
 std::string CConnRtmp::getUrl()
 {
+	if (!mstrPushUrl.empty())
+	{
+		return mstrPushUrl;
+	}
 	return murl;
 }
 
@@ -724,6 +772,7 @@ int CConnRtmp::setPublishTask()
 	std::string modeName = "CConnRtmp "+mrtmp->getRtmpType();
 	mflvPump = new CFlvPump(this,mHash,mHashIdx,mremoteAddr,modeName,murl);
 	mflvPump->setPublish();
+	tryCreatePushTask();
 	return CMS_OK;
 }
 
@@ -737,31 +786,70 @@ int CConnRtmp::setPlayTask()
 	}
 	misPlay = true;
 	mrw->setReadBuffer(1024*32);
-	
 	std::string modeName = "CConnRtmp "+mrtmp->getRtmpType();
 	mflvPump = new CFlvPump(this,mHash,mHashIdx,mremoteAddr,modeName,murl);
 	return CMS_OK;
 }
 
-void CConnRtmp::tryCreateTask()
+void CConnRtmp::tryCreatePullTask()
 {
 	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
 	{
-		CTaskMgr::instance()->createTask(murl,"",murl,"",CREATE_ACT_PULL,false,false);
+		CTaskMgr::instance()->createTask(mHash,murl,"",murl,"",CREATE_ACT_PULL,false,false);
+	}
+}
+
+void CConnRtmp::tryCreatePushTask(bool isRetry/* = false*/)
+{
+	if (isRetry)
+	{
+		if (CTaskMgr::instance()->pullTaskIsExist(mHash))
+		{
+			if (!CTaskMgr::instance()->pushTaskIsExist(mpushHash))
+			{
+				logs->debug("%s [CConnRtmp::tryCreatePushTask] %s rtmp %s need to retry to publish.",
+					mremoteAddr.c_str(), murl.c_str(), mrtmp->getRtmpType().c_str());
+				CTaskMgr::instance()->createTask(mHash, murl, murl, murl, "", CREATE_ACT_PUSH, false, false);
+			}
+			else
+			{
+				logs->debug("%s [CConnRtmp::tryCreatePushTask] %s rtmp %s publish task is exist.no need to publish.",
+					mremoteAddr.c_str(), murl.c_str(), mrtmp->getRtmpType().c_str());
+			}
+		}
+		else
+		{
+			logs->debug("%s [CConnRtmp::tryCreatePushTask] %s rtmp %s pull task is exist.no need to publish.",
+				mremoteAddr.c_str(), murl.c_str(), mrtmp->getRtmpType().c_str());
+		}
+	}
+	else
+	{
+		logs->debug("%s [CConnRtmp::tryCreatePushTask] %s rtmp %s need to be published.",
+			mremoteAddr.c_str(), murl.c_str(), mrtmp->getRtmpType().c_str());
+		CTaskMgr::instance()->createTask(mHash, murl, murl, murl, "", CREATE_ACT_PUSH, false, false);
 	}
 }
 
 void CConnRtmp::makeHash()
 {
-	string hashUrl = readHashUrl(murl);
-	CSHA1 sha;
-	sha.write(hashUrl.c_str(), hashUrl.length());
-	string strHash = sha.read();
-	mHash = HASH((char *)strHash.c_str());
-	mstrHash = hash2Char(mHash.data);
-	mHashIdx = CFlvPool::instance()->hashIdx(mHash);
-	logs->debug("%s [CConnRtmp::makeHash] %s rtmp %s hash url %s,hash=%s",
-		mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),hashUrl.c_str(),mstrHash.c_str());
+	HASH tmpHash;
+	if (mHash == tmpHash)
+	{
+		string hashUrl = readHashUrl(murl);
+		CSHA1 sha;
+		sha.write(hashUrl.c_str(), hashUrl.length());
+		string strHash = sha.read();
+		mHash = HASH((char *)strHash.c_str());
+		mstrHash = hash2Char(mHash.data);
+		mHashIdx = CFlvPool::instance()->hashIdx(mHash);
+		logs->debug("%s [CConnRtmp::makeHash] %s rtmp %s hash url %s,hash=%s",
+			mremoteAddr.c_str(),murl.c_str(),mrtmp->getRtmpType().c_str(),hashUrl.c_str(),mstrHash.c_str());
+	}
+	else
+	{
+		mHashIdx = CFlvPool::instance()->hashIdx(mHash);
+	}
 	mflvTrans->setHash(mHashIdx,mHash);
 }
 
@@ -853,10 +941,15 @@ std::string CConnRtmp::getHost()
 	return mHost;
 }
 
-void    CConnRtmp::makeOneTask()
+void CConnRtmp::makeOneTask()
 {
 	makeOneTaskDownload(mHash,0,false);
-	makeOneTaskMedia(mHash,mflvPump->getVideoFrameRate(),mflvPump->getAudioFrameRate(),
+	makeOneTaskMedia(mHash,mflvPump->getVideoFrameRate(),mflvPump->getAudioFrameRate(),mflvPump->getWidth(),mflvPump->getHeight(),
 		mflvPump->getAudioSampleRate(),mflvPump->getMediaRate(),getVideoType(mflvPump->getVideoType()),
-		getAudioType(mflvPump->getAudioType()),murl,mremoteAddr);
+		getAudioType(mflvPump->getAudioType()),murl,mremoteAddr, mrw->netType() == NetUdp);
+}
+
+CReaderWriter *CConnRtmp::rwConn()
+{
+	return mrw;
 }

@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -28,6 +28,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <common/cms_char_int.h>
 #include <ev/cms_ev.h>
 #include <conn/cms_conn_rtmp.h>
+#include <app/cms_app_info.h>
 #include <log/cms_log.h>
 #include <errno.h>
 #include <sstream>
@@ -73,10 +74,13 @@ CRtmpProtocol::CRtmpProtocol(void *super,RtmpType rtmpType,CBufferReader *rd,
 	mtransactionID = 1;
 	mcmsReadTimeOutDo = 0;
 	mcmsWriteTimeOutDo = 0;
-	mrw->setNodelay(1);
+	mrw->setNodelay(1); //为了加快握手速度 关闭nagle算法
 	misCloseNodelay = false;
 	mulNodelayEndTime = 0;
 	mps1 = NULL;
+	misCanDoTransmission = false;
+	misCmsConnection = false;
+	msProtocol = "rtmp-flv";
 }
 
 CRtmpProtocol::~CRtmpProtocol()
@@ -186,6 +190,13 @@ int CRtmpProtocol::handShake()
 
 int CRtmpProtocol::c2sComplexShakeC0C1()
 {
+#ifdef __CMS_APP_DEBUG__
+	char szTime[30] = { 0 };
+	getTimeStr(szTime);
+	printf("%s >>>>>22222 %s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s\n", szTime,
+		mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
+
 	logs->debug("%s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s",
 		mremoteAddr.c_str(),getRtmpType().c_str());
 	char szC0 = 0x03;//握手第一字节 0x03
@@ -225,11 +236,23 @@ int CRtmpProtocol::c2sComplexShakeC0C1()
 	}
 	delete[] pc1;
 	mrtmpStatus = RtmpStatusShakeC0C1;
+
+	logs->debug("%s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s status change to RtmpStatusShakeC0C1",
+		mremoteAddr.c_str(),getRtmpType().c_str());
+
+#ifdef __CMS_APP_DEBUG__
+	printf("%s >>>>>22222 %s [CRtmpProtocol::c2sComplexShakeC0C1] enter rtmp %s status change to RtmpStatusShakeC0C1\n", szTime,
+		mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
+
 	return CMS_OK;
 }
 
 int CRtmpProtocol::c2sComplexShakeS0()
 {
+	//logs->debug("%s [CRtmpProtocol::c2sComplexShakeS0] enter rtmp %s ",
+	//	mremoteAddr.c_str(),getRtmpType().c_str());
+
 	if (mrdBuff->size() < 1 && mrdBuff->grow(1) == CMS_ERROR)
 	{
 		logs->error("%s [CRtmpProtocol::c2sComplexShakeS0] rtmp %s grow 1 byte fail,errno=%d,strerrno=%s ***",
@@ -249,11 +272,17 @@ int CRtmpProtocol::c2sComplexShakeS0()
 		return CMS_ERROR;
 	}
 	mrtmpStatus = RtmpStatusShakeS0;
+
+	//logs->debug("%s [CRtmpProtocol::c2sComplexShakeS0] enter rtmp %s status change to RtmpStatusShakeS0",
+	//	mremoteAddr.c_str(),getRtmpType().c_str());
+
 	return CMS_OK;
 }
 
 int CRtmpProtocol::c2sComplexShakeS1C2()
 {
+	logs->debug("%s [CRtmpProtocol::c2sComplexShakeS1C2] enter rtmp %s ",
+		mremoteAddr.c_str(),getRtmpType().c_str());	
 	if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN-mrdBuff->size()) == CMS_ERROR)
 	{
 		logs->error("%s [CRtmpProtocol::c2sComplexShakeS1C2] rtmp %s 1 grow bytes fail,errno=%d,strerrno=%s ***",
@@ -293,11 +322,18 @@ int CRtmpProtocol::c2sComplexShakeS1C2()
 	}
 	delete[] pc2;
 	mrtmpStatus = RtmpStatusShakeS1;
+
+	logs->debug("%s [CRtmpProtocol::c2sComplexShakeS1C2] enter rtmp %s status change to RtmpStatusShakeS1",
+		mremoteAddr.c_str(),getRtmpType().c_str());
+
 	return CMS_OK;
 }
 
 int CRtmpProtocol::c2sComplexShakeS2()
 {
+	logs->debug("%s [CRtmpProtocol::c2sComplexShakeS2] enter rtmp %s ",
+		mremoteAddr.c_str(),getRtmpType().c_str());
+
 	if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN-mrdBuff->size()) == CMS_ERROR)
 	{
 		logs->error("%s [CRtmpProtocol::c2sComplexShakeS2] rtmp %s 2 grow bytes fail,errno=%d,strerrno=%s ***",
@@ -317,9 +353,22 @@ int CRtmpProtocol::c2sComplexShakeS2()
 
 int CRtmpProtocol::s2cComplexShakeC012()
 {
+#ifdef __CMS_APP_DEBUG__
+	char szTime[30] = { 0 };
+	getTimeStr(szTime);
+#endif
+
 	if (mrtmpStatus == RtmpStatusShakeNone)
 	{
-		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN+1 && mrdBuff->grow(SHAKE_RAND_DATA_LEN+1) == CMS_ERROR)
+#ifdef __CMS_APP_DEBUG__
+		printf("%s >>>>>22222 %s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake RtmpStatusShakeNone.\n", szTime,
+			mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
+
+		logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake RtmpStatusShakeNone.",
+			mremoteAddr.c_str(),getRtmpType().c_str());
+
+		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN+1 && mrdBuff->grow(SHAKE_RAND_DATA_LEN+1-mrdBuff->size()) == CMS_ERROR)
 		{
 			logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s 2 grow SHAKE_RAND_DATA_LEN+1 bytes fail,errno=%d,strerrno=%s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),mrdBuff->errnos(),mrdBuff->errnoCode());
@@ -330,16 +379,16 @@ int CRtmpProtocol::s2cComplexShakeC012()
 			//data not enough
 			return CMS_OK;
 		}
-		char *ch = mrdBuff->peek(1);
-		if (*ch != 0x03 && *ch != 0x06)
+		char c0 = *mrdBuff->peek(1);
+		if (c0 != 0x03 && c0 != 0x06)
 		{
 			logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake 0x03 or 06 fail ***",
 				mremoteAddr.c_str(),getRtmpType().c_str());
 			return CMS_ERROR;
 		}
-		char *c0 = mrdBuff->peek(SHAKE_RAND_DATA_LEN+1)+1;
+		char *c0c1 = mrdBuff->peek(SHAKE_RAND_DATA_LEN+1)+1;
 		c1s1 c1;
-		if ((c1.c1_parse(c0, srs_schema0)) != 0)
+		if ((c1.c1_parse(c0c1, srs_schema0)) != 0)
 		{
 			logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s parse c1 schema%d error ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),srs_schema0);
@@ -349,7 +398,7 @@ int CRtmpProtocol::s2cComplexShakeC012()
 		bool isValid = false;  
 		if (c1.c1_validate_digest(isValid) != 0 || !isValid)
 		{
-			if (c1.c1_parse(c0, srs_schema1) != 0)
+			if (c1.c1_parse(c0c1, srs_schema1) != 0)
 			{
 				logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s parse c1 schema%d error ***",
 					mremoteAddr.c_str(),getRtmpType().c_str(),srs_schema1);
@@ -381,7 +430,7 @@ int CRtmpProtocol::s2cComplexShakeC012()
 		}
 		// 发送 s0s1s2  
 		char* s0s1s2 = new char[3073];
-		s0s1s2[0] = 0x03;
+		s0s1s2[0] = c0;
 		s1.dump(s0s1s2 + 1);
 		s2.dump(s0s1s2 + 1537);
 
@@ -396,10 +445,17 @@ int CRtmpProtocol::s2cComplexShakeC012()
 		}
 		delete[] s0s1s2;
 		mrtmpStatus = RtmpStatusShakeC0C1;
+
+		logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake change to RtmpStatusShakeC0C1.",
+			mremoteAddr.c_str(),getRtmpType().c_str());
+
+#ifdef __CMS_APP_DEBUG__
+		printf("%s >>>>>22222 %s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s complex shake change to RtmpStatusShakeC0C1.\n", szTime,
+			mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
 	}
-	else
 	{
-		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN) == CMS_ERROR)
+		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN-mrdBuff->size()) == CMS_ERROR)
 		{
 			logs->error("%s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s 2 grow SHAKE_RAND_DATA_LEN bytes fail,errno=%d,strerrno=%s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),mrdBuff->errnos(),mrdBuff->errnoCode());
@@ -414,6 +470,11 @@ int CRtmpProtocol::s2cComplexShakeC012()
 			mremoteAddr.c_str(),getRtmpType().c_str());
 		mrtmpStatus = RtmpStatusShakeSuccess;
 		mfinishShake = true;
+
+#ifdef __CMS_APP_DEBUG__
+		printf("%s >>>>>22222 %s [CRtmpProtocol::s2cComplexShakeC012] rtmp %s handshake succ.\n", szTime,
+			mremoteAddr.c_str(), getRtmpType().c_str());
+#endif
 	}
 	return CMS_OK;
 }
@@ -422,70 +483,59 @@ int CRtmpProtocol::s2cSampleShakeC012()
 {
 	if (mrtmpStatus == RtmpStatusShakeNone)
 	{
+		logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s complex shake RtmpStatusShakeNone.",
+			mremoteAddr.c_str(),getRtmpType().c_str());
+
 		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN+1)
 		{
 			//data not enough
 			return CMS_OK;
 		}
-		char ch = mrdBuff->readByte();
-		if (ch != 0x03 && ch != 0x06)
+		char c0 = mrdBuff->readByte();
+		if (c0 != 0x03 && c0 != 0x06)
 		{
 			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s complex shake 0x03 or 06 fail ***",
 				mremoteAddr.c_str(),getRtmpType().c_str());
 			return CMS_ERROR;
 		}
+		char *c1 = mrdBuff->readBytes(SHAKE_RAND_DATA_LEN);
 		mps1 = new char[SHAKE_RAND_DATA_LEN];
-		char *pS0S1S2 = new char[SHAKE_RAND_DATA_LEN+1];
-		pS0S1S2[0] = 0x03;
-		//s1
-		char *pSS = pS0S1S2+1;
-		struct timeval tv;
-		gettimeofday(&tv,NULL);
-		unsigned long ulTime = htonl(tv.tv_sec);
-		memcpy(pSS,(char *)&ulTime,4);
-
-		//5-8字节都为 0，协议修改了？
-		pSS[4] = 0x00;
-		pSS[5] = 0x00;
-		pSS[6] = 0x00;
-		pSS[7] = 0x00;
-		//随机字符串
-		for (int i = 8; i < SHAKE_RAND_DATA_LEN-8; ++i)
-		{
-			pSS[i] = rand() % 256;
-		}
+		memcpy(mps1, c1, SHAKE_RAND_DATA_LEN);		
 
 		int nwrite = 0;
-		int ret = mrw->write(pS0S1S2,SHAKE_RAND_DATA_LEN+1,nwrite);
-		if(ret != CMS_OK || nwrite != SHAKE_RAND_DATA_LEN+1)
+		char s0 = c0;
+		int ret = mrw->write(&s0, 1, nwrite);
+		if (ret != CMS_OK || nwrite != 1)
 		{
-			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s0s1 fail,errno=%d,strerrno=%s ***",
-				mremoteAddr.c_str(),getRtmpType().c_str(),mrw->errnos(),mrw->errnoCode());
-			delete[] pS0S1S2;
+			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s0 fail,errno=%d,strerrno=%s ***",
+				mremoteAddr.c_str(), getRtmpType().c_str(), mrw->errnos(), mrw->errnoCode());
 			return CMS_ERROR;
 		}
-		memcpy(mps1,pSS,SHAKE_RAND_DATA_LEN);
+		nwrite = 0;
+		ret = mrw->write(mps1,SHAKE_RAND_DATA_LEN,nwrite);
+		if(ret != CMS_OK || nwrite != SHAKE_RAND_DATA_LEN)
+		{
+			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s1 fail,errno=%d,strerrno=%s ***",
+				mremoteAddr.c_str(),getRtmpType().c_str(),mrw->errnos(),mrw->errnoCode());
+			return CMS_ERROR;
+		}
 		//s2
-		char *c1 = mrdBuff->readBytes(SHAKE_RAND_DATA_LEN);
-		//memcpy(pSS,c1+1,4);
-		//memcpy(pSS+4,(char *)&ulTime,4);
-		//memcpy(pSS+8,c1+9,SHAKE_RAND_DATA_LEN-8);
-
 		nwrite = 0;
 		ret = mrw->write(c1,SHAKE_RAND_DATA_LEN,nwrite);
 		if(ret != CMS_OK || nwrite != SHAKE_RAND_DATA_LEN)
 		{
 			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s write s2 fail,errno=%d,strerrno=%s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),mrw->errnos(),mrw->errnoCode());
-			delete[] pS0S1S2;
 			return CMS_ERROR;
 		}
-		delete[] pS0S1S2;
 		mrtmpStatus = RtmpStatusShakeC1;
+
+		logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s complex change to RtmpStatusShakeC1.",
+			mremoteAddr.c_str(),getRtmpType().c_str());
 	}
 	else if (mrtmpStatus == RtmpStatusShakeC1)
 	{
-		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN) == CMS_ERROR)
+		if (mrdBuff->size() < SHAKE_RAND_DATA_LEN && mrdBuff->grow(SHAKE_RAND_DATA_LEN-mrdBuff->size()) == CMS_ERROR)
 		{
 			logs->error("%s [CRtmpProtocol::s2cSampleShakeC012] rtmp %s 1 grow SHAKE_RAND_DATA_LEN bytes fail,errno=%d,strerrno=%s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),mrdBuff->errnos(),mrdBuff->errnoCode());
@@ -512,7 +562,10 @@ int CRtmpProtocol::want2Read(bool isTimeout)
 		mcmsReadTimeOutDo--;
 		doReadTimeout();
 		//不能往下处理数据
-		return CMS_OK;
+		if (mrw->netType() == NetTcp)//udp比较特殊，需要定时器
+		{
+			return CMS_OK;
+		}		
 	}
 	if (!mfinishShake)
 	{
@@ -547,6 +600,12 @@ int CRtmpProtocol::want2Read(bool isTimeout)
 
 int CRtmpProtocol::want2Write(bool isTimeout)
 {
+#ifdef __CMS_APP_DEBUG__
+	logs->debug("%s [CRtmpProtocol::want2Write] rtmp %s want2Write is timeout %s",
+		mremoteAddr.c_str(), getRtmpType().c_str(), isTimeout ? "true" : "false");
+#endif // __CMS_APP_DEBUG__
+
+	
 	if (isTimeout)
 	{
 		assert(mcmsWriteTimeOutDo==1);
@@ -565,14 +624,14 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 				return CMS_ERROR;
 			}
 		}
-	}
+	}	
 	int ret = mwrBuff->flush();
 	if (ret == CMS_ERROR)
 	{
-		logs->error("%s [CRtmpProtocol::doRtmpConnect] rtmp %s flush fail,errno=%d,strerrno=%s ***",
+		logs->error("%s [CRtmpProtocol::want2Write] rtmp %s flush fail,errno=%d,strerrno=%s ***",
 			mremoteAddr.c_str(),getRtmpType().c_str(),mwrBuff->errnos(),mwrBuff->errnoCode());
 		return CMS_ERROR;
-	}	
+	}
 	//do write
 	if (mrtmpType == RtmpClient2Play || mrtmpType == RtmpServerBPublish || mrtmpType == RtmpServerBPlayOrPublish)
 	{
@@ -584,14 +643,17 @@ int CRtmpProtocol::want2Write(bool isTimeout)
 	{
 		if (!mwrBuff->isUsable())
 		{
-			//如果CBufferWriter还有客观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何数据
+			//如果CBufferWriter还有可观的数据没法送出去，开启超时计时器来定时发送数据，且不再读取任何发送数据
 			//logs->debug("%s [CRtmpProtocol::doRtmpConnect] rtmp %s too many data left",
 			//	mremoteAddr.c_str(),getRtmpType().c_str());
+			logs->error("%s [CRtmpProtocol::want2Write] rtmp %s too much data left",
+				mremoteAddr.c_str(), getRtmpType().c_str());
 			doWriteTimeout();
 			return CMS_OK;
 		}
+
 		//只有播放连接或者转推任务才需要发送流数据
-		if (mrtmpType == RtmpServerBPlay || mrtmpType == RtmpClient2Publish)
+		if (mrtmpType == RtmpServerBPlay || (mrtmpType == RtmpClient2Publish && misCanDoTransmission))
 		{
 			int ret = msuper->doTransmission();
 			if (ret < 0)
@@ -621,7 +683,7 @@ int CRtmpProtocol::wait2Write()
 }
 
 int CRtmpProtocol::readMessage()
-{
+{	
 	char fmt = 0;
 	int  cid = 0;
 	int handleLen = 0;
@@ -653,7 +715,7 @@ int CRtmpProtocol::readMessage()
 	{
 		return CMS_OK;
 	}
-	mrdBuff->skip(handleLen);
+	mrdBuff->skip(handleLen);	
 	return handleLen;
 }
 
@@ -782,7 +844,7 @@ int CRtmpProtocol::readRtmpHeader(RtmpHeader &header,int fmt,int &handleLen)
 		size += 4;
 		if ( mrdBuff->size() < size && mrdBuff->grow(size-mrdBuff->size()) == CMS_ERROR)
 		{
-			logs->error("*** %s [CRtmpProtocol::readRtmpHeader] rtmp %s grow rtmp size %d bytes fail,errno=%d,strerrno=%s ***\n",
+			logs->error("*** %s [CRtmpProtocol::readRtmpHeader] rtmp %s grow rtmp size %d bytes fail,errno=%d,strerrno=%s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),size,mrdBuff->errnos(),mrdBuff->errnoCode());
 			return CMS_ERROR;
 		}
@@ -1154,6 +1216,8 @@ int CRtmpProtocol::decodeWindowSize(RtmpMessage *msg)
 	}
 	int *pWindowSize = (int *)msg->buffer;
 	mreadWindowSize = ntohl(*pWindowSize);
+	logs->debug("#####%s [CRtmpProtocol::decodeWindowSize] rtmp %s peer windows size=%d",
+		mremoteAddr.c_str(),getRtmpType().c_str(),mreadWindowSize);
 	return CMS_OK;
 }
 
@@ -1167,7 +1231,7 @@ int CRtmpProtocol::decodeBandWidth(RtmpMessage *msg)
 	}
 	int *pBandWidth = (int *)msg->buffer;
 	mreadBandWidthSize = ntohl(*pBandWidth);
-	logs->debug("#####%s [CRtmpProtocol::decodeChunkSize] rtmp %s peer bandwidth size=%d",
+	logs->debug("#####%s [CRtmpProtocol::decodeBandWidth] rtmp %s peer bandwidth size=%d",
 		mremoteAddr.c_str(),getRtmpType().c_str(),mreadBandWidthSize);
 	if (msg->dataLen > 4)
 	{
@@ -1329,8 +1393,7 @@ int CRtmpProtocol::decodeAmf03(RtmpMessage *msg,bool isAmf3)
 	{	
 		moutStreamID = msg->streamId;
 		ret = decodePublish(block);
-		mrtmpType = RtmpServerBPublish;
-		ret = msuper->setPublishTask();
+		mrtmpType = RtmpServerBPublish;		
 	}
 	else if (block->cmd == Amf0CommandPlay)
 	{
@@ -1372,7 +1435,7 @@ int CRtmpProtocol::decodeAmf03(RtmpMessage *msg,bool isAmf3)
 			mrtmpStatus = RtmpStatusError;
 			ret = CMS_ERROR;
 		}
-		else if (strCodeValue == Amf0CommandOnStatus)
+		else if (strCodeValue == StatusCodePublishStart)
 		{
 			//推数据
 			int ret = msuper->doTransmission();
@@ -1394,7 +1457,8 @@ int CRtmpProtocol::decodeAmf03(RtmpMessage *msg,bool isAmf3)
 						ret = CMS_OK;
 						doWriteTimeout();
 					}
-				}				
+				}
+				misCanDoTransmission = true;
 			}
 		}
 	}
@@ -1505,12 +1569,12 @@ int CRtmpProtocol::decodeCommandResult(RtmpCommand cmd)
 
 int CRtmpProtocol::doConnect()
 {
-	if (mrtmpType == RtmpClient2Play &&
+	/*if (mrtmpType == RtmpClient2Play &&
 		msuper->setPlayTask() == CMS_ERROR)
 	{
 		//拉流任务判断是否已经存在
 		return CMS_ERROR;
-	}
+	}*/
 	if (mrtmpType == RtmpClient2Play)
 	{
 		if (!parseUrl(msuper->getUrl(),mlinkUrl))
@@ -1522,7 +1586,7 @@ int CRtmpProtocol::doConnect()
 	}
 	else if (mrtmpType == RtmpClient2Publish)
 	{
-		if (!parseUrl(msuper->getPushUrl(),mlinkUrl))
+		if (!parseUrl(msuper->getUrl(),mlinkUrl))
 		{
 			logs->error("*** %s [CRtmpProtocol::doConnect] rtmp %s parse url fail %s ***",
 				mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
@@ -1538,8 +1602,9 @@ int CRtmpProtocol::doConnect()
 	{
 		strStream << mlinkUrl.protocol << "://" << mlinkUrl.host << ":" << mlinkUrl.port << "/" << mlinkUrl.app;
 	}
-	logs->info(">>> %s [CRtmpProtocol::doConnect] rtmp %s connect %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doConnect] %s rtmp %s doConnect.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandConnect,strlen(Amf0CommandConnect));
 	amf0::amf0BlockPush(block,data);
@@ -1547,7 +1612,11 @@ int CRtmpProtocol::doConnect()
 	amf0::amf0BlockPush(block,data);
 	amf0::Amf0Data *object = amf0::amf0ObjectNew();
 	amf0::amf0ObjectAdd(object,"app",amf0::amf0StringNew((amf0::uint8 *)mlinkUrl.app.c_str(),mlinkUrl.app.length()));
-	amf0::amf0ObjectAdd(object,"flashVer",amf0::amf0StringNew((amf0::uint8 *)APP_VERSION,strlen(APP_VERSION)));
+	std::string appVersion;
+	appVersion.append(APP_NAME);
+	appVersion.append("/");
+	appVersion.append(APP_VERSION);
+	amf0::amf0ObjectAdd(object,"flashVer",amf0::amf0StringNew((amf0::uint8 *)appVersion.c_str(), appVersion.length()));
 	amf0::amf0ObjectAdd(object,"tcUrl",amf0::amf0StringNew((amf0::uint8 *)strStream.str().c_str(),strStream.str().length()));
 	amf0::amf0ObjectAdd(object,"fpad",amf0::amf0BooleanNew(0x00));
 	amf0::amf0ObjectAdd(object,"capabilities",amf0::amf0NumberNew(15));
@@ -1579,8 +1648,9 @@ int CRtmpProtocol::doConnect()
 
 int CRtmpProtocol::doReleaseStream()
 {
-	logs->info(">>> %s [CRtmpProtocol::doConnect] rtmp %s releaseStream %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doReleaseStream] %s rtmp %s doReleaseStream.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandReleaseStream,strlen(Amf0CommandReleaseStream));
 	amf0::amf0BlockPush(block,data);
@@ -1613,8 +1683,9 @@ int CRtmpProtocol::doReleaseStream()
 
 int CRtmpProtocol::doFCPublish()
 {
-	logs->info(">>> %s [CRtmpProtocol::doConnect] rtmp %s fcPublish %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doFCPublish] %s rtmp %s doFCPublish.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandFcPublish,strlen(Amf0CommandFcPublish));
 	amf0::amf0BlockPush(block,data);
@@ -1647,8 +1718,9 @@ int CRtmpProtocol::doFCPublish()
 
 int CRtmpProtocol::doCreateStream()
 {
-	logs->info(">>> %s [CRtmpProtocol::doConnect] rtmp %s createStream %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doCreateStream] %s rtmp %s doCreateStream.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandCreateStream,strlen(Amf0CommandCreateStream));
 	amf0::amf0BlockPush(block,data);
@@ -1681,12 +1753,14 @@ int CRtmpProtocol::doCreateStream()
 
 int CRtmpProtocol::doPlay()
 {
-	logs->info(">>> %s [CRtmpProtocol::doPlay] rtmp %s play %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doPlay] %s rtmp %s doPlay.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandPlay,strlen(Amf0CommandPlay));
 	amf0::amf0BlockPush(block,data);
-	data = amf0::amf0NumberNew(mtransactionID);
+	data = amf0::amf0NumberNew(0);
+	//data = amf0::amf0NumberNew(mtransactionID);
 	amf0::amf0BlockPush(block,data);
 	data = amf0::amf0NullNew();
 	amf0::amf0BlockPush(block,data);
@@ -1713,14 +1787,15 @@ int CRtmpProtocol::doPlay()
 		return CMS_ERROR;
 	}
 	mrtmpStatus = RtmpStatusPlay1;
-	mtransactionCmd.insert(make_pair(mtransactionID++,RtmpCommandPlay));
+	//mtransactionCmd.insert(make_pair(mtransactionID++,RtmpCommandPlay));
 	return CMS_OK;
 }
 
 int CRtmpProtocol::doPublish() 
 {
-	logs->info(">>> %s [CRtmpProtocol::doPublish] rtmp %s publish %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getPushUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doPublish] %s rtmp %s doPublish.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandPublish,strlen(Amf0CommandPublish));
 	amf0::amf0BlockPush(block,data);
@@ -1766,8 +1841,9 @@ int CRtmpProtocol::doPublish()
 
 int CRtmpProtocol::doSetBufLength()
 {
-	logs->info(">>> %s [CRtmpProtocol::doSetBufLength] rtmp %s set buffer length %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doSetBufLength] %s rtmp %s doSetBufLength.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	string strRtmpBody;
 	char fmt = CHUNK_STREAM_ID_PROTOCOL;
 	char timestamp[3] = {0};
@@ -1793,8 +1869,9 @@ int CRtmpProtocol::doSetBufLength()
 
 int CRtmpProtocol::doCheckBW()
 {	
-	logs->info(">>> %s [CRtmpProtocol::doCheckBW] rtmp %s _checkbw %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doCheckBW] %s rtmp %s doCheckBW.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)"_checkbw",8);
 	amf0::amf0BlockPush(block,data);
@@ -1826,10 +1903,10 @@ int CRtmpProtocol::doCheckBW()
 
 int CRtmpProtocol::doWindowSize()
 {
-	logs->info(">>> %s [CRtmpProtocol::doWindowSize] rtmp %s window size %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
-	string strRtmpBody;
+	logs->debug(">>> %s [CRtmpProtocol::doWindowSize] %s rtmp %s doWindowSize.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
 
+	string strRtmpBody;
 	char fmt = CHUNK_STREAM_ID_PROTOCOL;
 	char timestamp[3] = {0};
 	char streamID[4] = {0};
@@ -1851,8 +1928,9 @@ int CRtmpProtocol::doWindowSize()
 
 int CRtmpProtocol::doBandWidth()
 {
-	logs->info(">>> %s [CRtmpProtocol::doBandWidth] rtmp %s bandwidth %s",
-		mremoteAddr.c_str(),getRtmpType().c_str(),msuper->getUrl().c_str());
+	logs->debug(">>> %s [CRtmpProtocol::doBandWidth] %s rtmp %s bandwidth.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	string strRtmpBody;
 	
 	char fmt = CHUNK_STREAM_ID_PROTOCOL;
@@ -1876,6 +1954,9 @@ int CRtmpProtocol::doBandWidth()
 
 int CRtmpProtocol::doAcknowledgement()
 {
+	logs->debug(">>> %s [CRtmpProtocol::doAcknowledgement] %s rtmp %s doAcknowledgement.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	string strRtmpBody;
 	char fmt = CHUNK_STREAM_ID_PROTOCOL;
 	char timestamp[3] = {0};
@@ -1906,7 +1987,11 @@ int CRtmpProtocol::doConnectSucc(int event,int objectEncoding)
 	amf0::amf0BlockPush(block,data);
 
 	amf0::Amf0Data *object = amf0::amf0ObjectNew();
-	amf0::amf0ObjectAdd(object,"fmsver",amf0::amf0StringNew((amf0::uint8*)APP_VERSION,strlen(APP_VERSION)));
+	std::string appVersion;
+	appVersion.append(APP_NAME);
+	appVersion.append("/");
+	appVersion.append(APP_VERSION);
+	amf0::amf0ObjectAdd(object,"fmsver",amf0::amf0StringNew((amf0::uint8*)appVersion.c_str(), appVersion.length()));
 	amf0::amf0ObjectAdd(object,"capabilities",amf0::amf0NumberNew(255));
 	amf0::amf0ObjectAdd(object,"mode",amf0::amf0NumberNew(1));
 	amf0::amf0BlockPush(block,object);
@@ -1918,7 +2003,7 @@ int CRtmpProtocol::doConnectSucc(int event,int objectEncoding)
 	amf0::amf0ObjectAdd(object,"objectEncoding",amf0::amf0NumberNew(objectEncoding));	
 
 	amf0::Amf0Data *ecmaArray = amf0::amf0EcmaArrayNew();
-	amf0::amf0ObjectAdd(ecmaArray,"version",amf0::amf0StringNew((amf0::uint8*)NUM_VERSION,strlen(NUM_VERSION)));
+	amf0::amf0ObjectAdd(ecmaArray,"version",amf0::amf0StringNew((amf0::uint8*)APP_VERSION,strlen(APP_VERSION)));
 	amf0::amf0ObjectAdd(object,"data",ecmaArray);
 
 	amf0::amf0BlockPush(block,object);
@@ -1947,6 +2032,9 @@ int CRtmpProtocol::doConnectSucc(int event,int objectEncoding)
 
 int CRtmpProtocol::doOnBWDone() 
 {
+	logs->debug(">>> %s [CRtmpProtocol::doOnBWDone] %s rtmp %s doOnBWDone.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	amf0::Amf0Block *block = amf0::amf0BlockNew();
 	amf0::Amf0Data *data = amf0::amf0StringNew((amf0::uint8 *)Amf0CommandOnBwDone,strlen(Amf0CommandOnBwDone));
 	amf0::amf0BlockPush(block,data);
@@ -1977,6 +2065,9 @@ int CRtmpProtocol::doOnBWDone()
 
 int CRtmpProtocol::doChunkSize()
 {
+	logs->debug(">>> %s [CRtmpProtocol::doChunkSize] %s rtmp %s doChunkSize.",
+		mremoteAddr.c_str(),msuper->getUrl().c_str(),getRtmpType().c_str());
+
 	string strRtmpBody;
 	char fmt = CHUNK_STREAM_ID_PROTOCOL;
 	char timestamp[3] = {0};
@@ -1989,7 +2080,7 @@ int CRtmpProtocol::doChunkSize()
 	if (sendPacket(fmt,timestamp,NULL,((char*)&iBodyLen)+1,MESSAGE_TYPE_CHUNK_SIZE,
 		streamID,strRtmpBody.c_str(),strRtmpBody.length()) == false)
 	{
-		logs->error("*** %s [CRtmpProtocol::doChunkSize] rtmp %s send connect doChunkSize fail,errno=%d,strerrno=%s ***",
+		logs->error("*** %s [CRtmpProtocol::doChunkSize] rtmp %s send doChunkSize fail,errno=%d,strerrno=%s ***",
 			mremoteAddr.c_str(),getRtmpType().c_str(),mwrBuff->errnos(),mwrBuff->errnoCode());
 		return CMS_ERROR;
 	}
@@ -2482,6 +2573,10 @@ int CRtmpProtocol::decodeConnect(amf0::Amf0Block *block)
 	amf0::amf0Block5Value(block,"pageUrl",mreferUrl);
 	amf0::amf0Block5Value(block,"flashVer",strFlashVer);
 	amf0::amf0Block5Value(block,"objectEncoding",strObjectEncoding);
+	if (strFlashVer.find(APP_NAME) != string::npos)
+	{
+		misCmsConnection = true;
+	}
 	string strEvent;
 	amf0::Amf0Type type = amf0::amf0Block5Value(block,1,strEvent);
 	if (type == amf0::AMF0_TYPE_NUMERIC)
@@ -2616,6 +2711,12 @@ int CRtmpProtocol::decodePublish(amf0::Amf0Block *block)
 		doOnFCPublish();
 	}
 	mulNodelayEndTime = getTickCount();
+
+	if (msuper->setPublishTask() != CMS_OK)
+	{
+		return CMS_ERROR;
+	}
+	shouldCloseNodelay(true);
 	return doPublishSucc();
 }
 
@@ -2674,7 +2775,7 @@ int CRtmpProtocol::decodePlay(amf0::Amf0Block *block)
 	{
 		return CMS_ERROR;
 	}
-	msuper->tryCreateTask();
+	msuper->tryCreatePullTask();
 	int ret = msuper->doTransmission();
 	if (ret < 0)
 	{
@@ -2842,6 +2943,16 @@ void CRtmpProtocol::syncIO()
 	}
 }
 
+bool CRtmpProtocol::isCmsConnection()
+{
+	return misCmsConnection;
+}
+
+std::string CRtmpProtocol::protocol()
+{
+	return msProtocol;
+}
+
 int CRtmpProtocol::writeBuffSize()
 {
 	return mwrBuff->size();
@@ -2902,9 +3013,16 @@ void CRtmpProtocol::doReadTimeout()
 	}
 }
 
-void CRtmpProtocol::shouldCloseNodelay()
+void CRtmpProtocol::shouldCloseNodelay(bool force/* = false*/)
 {
-	if (!misCloseNodelay && mulNodelayEndTime > 0)
+	if (force)
+	{
+		logs->debug("#####%s [CRtmpProtocol::shouldCloseNodelay] rtmp %s force 2 close conn nodelay ",
+			mremoteAddr.c_str(), getRtmpType().c_str());
+		mrw->setNodelay(0);
+		misCloseNodelay = true;
+	}
+	else if (!misCloseNodelay && mulNodelayEndTime > 0)
 	{
 		if (getTickCount() - mulNodelayEndTime >= 1000*3)
 		{

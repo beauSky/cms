@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -45,27 +45,32 @@ public:
 	std::string getUrl();
 	std::string getPushUrl(){return "";};
 	std::string getRemoteIP();
-	cms_net_ev    *evReadIO();
-	cms_net_ev    *evWriteIO();
+	cms_net_ev    *evReadIO(cms_net_ev *ev = NULL);
+	cms_net_ev    *evWriteIO(cms_net_ev *ev = NULL);
 	void down8upBytes();
+
+	CReaderWriter *rwConn();
+
 	void reset();
 	int  doDecode();
 	int  doReadData(){return CMS_OK;};
 	int  doTransmission();
 	int  sendBefore(const char *data,int len);
 	bool isFinish();
+	bool isWebsocket();
 	int  doRead(bool isTimeout);
 	int  doWrite(bool isTimeout);
 private:
 	int  handle();
 	int  handleCrossDomain(int &ret);
-	int	 handleFlv(int &ret);
+	int	 handleFlv(int &ret, bool isDefault = false);
 	int  handleQuery(int &ret);
 	int  handleM3U8(int &ret);
 	int  handleTS(int &ret);
 	void makeHash();
 	void makeHash(std::string url);
 	void tryCreateTask();
+	int  writeRspHttpHeader(const char *data, int len);
 	
 	cms_net_ev	*mwatcherReadIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类
 	cms_net_ev	*mwatcherWriteIO;	//虽然由外面创建 cms_conn_mgr 或者 cms_net_dispatch 但是最终属于本类

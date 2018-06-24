@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -35,7 +35,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <static/cms_static.h>
 #include <net/cms_net_mgr.h>
 
-ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUrl,
+ChttpClient::ChttpClient(HASH &hash,CReaderWriter *rw,std::string pullUrl,std::string oriUrl,
 						 std::string refer,bool isTls)
 {
 	char remote[23] = {0};
@@ -107,6 +107,7 @@ ChttpClient::ChttpClient(CReaderWriter *rw,std::string pullUrl,std::string oriUr
 	if (!pullUrl.empty())
 	{
 		makeHash();
+		mHash = hash;
 		LinkUrl linkUrl;
 		if (parseUrl(pullUrl,linkUrl))
 		{
@@ -123,14 +124,20 @@ ChttpClient::~ChttpClient()
 		mremoteAddr.c_str());
 	if (mwatcherReadIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherReadIO);
+		if (mrw->netType() == NetTcp || (mrw->netType() == NetUdp && mrw->fd() > 0))//udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherReadIO);
+		}
 		freeCmsNetEv(mwatcherReadIO);
 		logs->debug("######### %s [ChttpClient::~ChttpClient] stop read io ",
 			mremoteAddr.c_str());
 	}
 	if (mwatcherWriteIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		if (mrw->netType() == NetTcp || (mrw->netType() == NetUdp && mrw->fd() > 0))//udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		}
 		freeCmsNetEv(mwatcherWriteIO);
 		logs->debug("######### %s [ChttpClient::~ChttpClient] stop write io ",
 			mremoteAddr.c_str());
@@ -144,7 +151,11 @@ ChttpClient::~ChttpClient()
 	delete mwrBuff;
 	delete mflvPump;
 	mrw->close();
-	delete mrw;
+	if (mrw->netType() == NetTcp)//udp 不调用
+	{
+		//udp 连接由udp模块自身管理 不需要也不能由外部释放
+		delete mrw;
+	}
 }
 
 int ChttpClient::doit()
@@ -258,24 +269,42 @@ std::string ChttpClient::getRemoteIP()
 	return mremoteIP;
 }
 
-cms_net_ev    *ChttpClient::evReadIO()
+cms_net_ev    *ChttpClient::evReadIO(cms_net_ev *ev)
 {
 	if (mwatcherReadIO == NULL)
 	{
-		mwatcherReadIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
-		CNetMgr::instance()->cneStart(mwatcherReadIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherReadIO = ev;
+		}
+		else
+		{			
+			mwatcherReadIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
+			CNetMgr::instance()->cneStart(mwatcherReadIO);
+		}
 	}
 	return mwatcherReadIO;
 }
 
-cms_net_ev    *ChttpClient::evWriteIO()
+cms_net_ev    *ChttpClient::evWriteIO(cms_net_ev *ev)
 {
 	if (mwatcherWriteIO == NULL)
 	{
-		mwatcherWriteIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
-		CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherWriteIO = ev;
+		}
+		else
+		{			
+			mwatcherWriteIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
+			CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		}
 	}
 	return mwatcherWriteIO;
 }
@@ -449,7 +478,7 @@ int ChttpClient::doReadData()
 				mtagLen = 0;
 				break;
 			default:
-				logs->error("*** %s [ChttpClient::doReadData] http %s read tag type %d unexpect *** \n",
+				logs->error("*** %s [ChttpClient::doReadData] http %s read tag type %d unexpect ***",
 					mremoteAddr.c_str(),moriUrl.c_str(),miTagType);
 				return 0;
 			}
@@ -502,22 +531,30 @@ int ChttpClient::request()
 
 void ChttpClient::makeHash()
 {
-	string hashUrl = readHashUrl(murl);
-	CSHA1 sha;
-	sha.write(hashUrl.c_str(), hashUrl.length());
-	string strHash = sha.read();
-	mHash = HASH((char *)strHash.c_str());
-	mstrHash = hash2Char(mHash.data);
-	mHashIdx = CFlvPool::instance()->hashIdx(mHash);
-	logs->debug("%s [ChttpClient::makeHash] %s hash url %s,hash=%s",
-		mremoteAddr.c_str(),murl.c_str(),hashUrl.c_str(),mstrHash.c_str());
+	HASH tmpHash;
+	if (mHash == tmpHash)
+	{
+		string hashUrl = readHashUrl(murl);
+		CSHA1 sha;
+		sha.write(hashUrl.c_str(), hashUrl.length());
+		string strHash = sha.read();
+		mHash = HASH((char *)strHash.c_str());
+		mstrHash = hash2Char(mHash.data);
+		mHashIdx = CFlvPool::instance()->hashIdx(mHash);
+		logs->debug("%s [ChttpClient::makeHash] %s hash url %s,hash=%s",
+			mremoteAddr.c_str(),murl.c_str(),hashUrl.c_str(),mstrHash.c_str());
+	}
+	else
+	{
+		mHashIdx = CFlvPool::instance()->hashIdx(mHash);
+	}
 }
 
 void ChttpClient::tryCreateTask()
 {
 	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
 	{
-		CTaskMgr::instance()->createTask(mredirectUrl,"",moriUrl,mstrRefer,CREATE_ACT_PULL,false,false);
+		CTaskMgr::instance()->createTask(mHash,mredirectUrl,"",moriUrl,mstrRefer,CREATE_ACT_PULL,false,false);
 	}
 }
 
@@ -529,10 +566,7 @@ int ChttpClient::decodeMetaData(char *data,int len)
 	{
 		misPushFlv = true;
 	}
-	else
-	{
-		delete[] data;
-	}
+	delete[] data;
 	return CMS_OK;
 }
 
@@ -643,12 +677,15 @@ std::string ChttpClient::getHost()
 }
 
 
-void    ChttpClient::makeOneTask()
+void ChttpClient::makeOneTask()
 {
 	makeOneTaskDownload(mHash,0,false);
-	makeOneTaskMedia(mHash,mflvPump->getVideoFrameRate(),mflvPump->getAudioFrameRate(),
+	makeOneTaskMedia(mHash,mflvPump->getVideoFrameRate(),mflvPump->getAudioFrameRate(),mflvPump->getWidth(), mflvPump->getHeight(),
 		mflvPump->getAudioSampleRate(),mflvPump->getMediaRate(),getVideoType(mflvPump->getVideoType()),
-		getAudioType(mflvPump->getAudioType()),murl,mremoteAddr);
+		getAudioType(mflvPump->getAudioType()),murl,mremoteAddr, mrw->netType() == NetUdp);
 }
 
-
+CReaderWriter *ChttpClient::rwConn()
+{
+	return mrw;
+}

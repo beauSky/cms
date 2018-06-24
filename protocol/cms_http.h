@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -45,6 +45,7 @@ public:
 	std::string getUrl();
 	void		setHeader(std::string key,std::string value);
 	std::string	getHeader(std::string key);
+	std::string	getHttpParam(std::string key);
 	void		clearHeader();
 	std::string readRequest();
 	void		setRemoteAddr(std::string addr);
@@ -116,6 +117,9 @@ public:
 	std::string remoteAddr();
 	std::string getUrl();
 	void syncIO();
+	bool isCmsConnection();
+	std::string protocol();
+
 	void setChunked();
 	cms_timer *cmsTimer2Write();
 	cms_timer *cmsTimer2Read();
@@ -162,5 +166,10 @@ private:
 	cms_timer		*mcmsReadTimeout;
 	cms_timer		*mcmsWriteTimeout;
 	BinaryWriter	*mbinaryWriter;
+
+	std::string		msProtocol;
+	int64			mwebsocketLen;
+	bool			mwebsocketIsMask;
+	int				mwebsocketMask[4];
 };
 #endif

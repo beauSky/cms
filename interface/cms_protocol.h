@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -39,5 +39,7 @@ public:
 	virtual void setWriteBuffer(int size) = 0;
 	virtual std::string remoteAddr() = 0;
 	virtual std::string getUrl() = 0;
+	virtual bool isCmsConnection() = 0;
+	virtual std::string protocol() = 0;
 };
 #endif

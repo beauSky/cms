@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -26,6 +26,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <net/cms_tcp_conn.h>
 #include <conn/cms_conn_mgr.h>
 #include <log/cms_log.h>
+#include <config/cms_config.h>
+#include <app/cms_app_info.h>
 #include <assert.h>
 
 #define MapTaskConnIteror std::map<HASH,Conn *>::iterator
@@ -34,6 +36,7 @@ CTaskMgr *CTaskMgr::minstance = NULL;
 CTaskMgr::CTaskMgr()
 {
 	misRun = false;
+	mtid = 0;
 }
 
 CTaskMgr::~CTaskMgr()
@@ -68,7 +71,7 @@ void *CTaskMgr::routinue(void *param)
 
 void CTaskMgr::thread()
 {
-	logs->info(">>>>> CTaskMgr thread pid=%d\n",gettid());
+	logs->info(">>>>> CTaskMgr thread pid=%d",gettid());
 	CreateTaskPacket *ctp;
 	bool isPop;
 	while (misRun)
@@ -91,27 +94,37 @@ void CTaskMgr::thread()
 			cmsSleep(10);
 		}
 	}
-	logs->info(">>>>> CTaskMgr thread leave pid=%d\n",gettid());
+	logs->info(">>>>> CTaskMgr thread leave pid=%d",gettid());
 }
 
 bool CTaskMgr::run()
 {
 	misRun = true;
-	int res = cmsCreateThread(&mtid,routinue,this,true);
+	int res = cmsCreateThread(&mtid,routinue,this,false);
 	if (res == -1)
 	{
 		char date[128] = {0};
 		getTimeStr(date);
-		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****\n",date,__FILE__,__LINE__);
+		logs->error("%s ***** file=%s,line=%d cmsCreateThread error *****",date,__FILE__,__LINE__);
 		return false;
 	}
 	return true;
 }
 
-void CTaskMgr::createTask(std::string pullUrl,std::string pushUrl,std::string oriUrl,
+void CTaskMgr::stop()
+{
+	logs->debug("##### CTaskMgr::stop begin #####");
+	misRun = false;
+	cmsWaitForThread(mtid, NULL);
+	mtid = 0;
+	logs->debug("##### CTaskMgr::stop finish #####");
+}
+
+void CTaskMgr::createTask(HASH &hash,std::string pullUrl,std::string pushUrl,std::string oriUrl,
 						  std::string refer,int createAct,bool isHotPush,bool isPush2Cdn)
 {
 	CreateTaskPacket * ctp = new CreateTaskPacket;
+	ctp->hash = hash;
 	ctp->createAct = createAct;
 	ctp->pullUrl = pullUrl;
 	ctp->pushUrl = pushUrl;
@@ -152,15 +165,59 @@ void CTaskMgr::pullCreateTask(CreateTaskPacket *ctp)
 	{
 		if (linUrl.protocol == PROTOCOL_RTMP)
 		{
-			CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"","",ctp->refer,TypeRtmp,RtmpClient2Play);
+			if (gcmsTestServer)
+			{
+				CConnMgrInterface::instance()->createConn(ctp->hash,
+					(char *)linUrl.addr.c_str(),
+					ctp->pullUrl,
+					"",
+					"",
+					ctp->refer,
+					TypeRtmp, RtmpClient2Play,
+					!CConfig::instance()->udpFlag()->isOpenUdpPull());
+			}
+			else
+			{
+				string sAddr = CConfig::instance()->upperAddr()->getPull(hash2Idx(ctp->hash));
+				if (!sAddr.empty())
+				{
+					logs->debug("[CTaskMgr::pullCreateTask] create pull task %s dial addr %s,is open udp %s.",
+						ctp->pullUrl.c_str(),
+						sAddr.c_str(),
+						CConfig::instance()->udpFlag()->isOpenUdpPull() ? "true" : "false");
+
+					CConnMgrInterface::instance()->createConn(ctp->hash,
+						sAddr.empty() ? (char *)linUrl.addr.c_str() : (char *)sAddr.c_str(),
+						ctp->pullUrl,
+						"",
+						"",
+						ctp->refer,
+						TypeRtmp, RtmpClient2Play,
+						!CConfig::instance()->udpFlag()->isOpenUdpPull());
+				}
+			}					
 		}
 		else if (linUrl.protocol == PROTOCOL_HTTP)
 		{
-			CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"",ctp->oriUrl,ctp->refer,TypeHttp,RtmpTypeNone);
+			CConnMgrInterface::instance()->createConn(ctp->hash,
+				(char *)linUrl.addr.c_str(),
+				ctp->pullUrl,
+				"",
+				ctp->oriUrl,
+				ctp->refer,
+				TypeHttp,
+				RtmpTypeNone);
 		}
 		else if (linUrl.protocol == PROTOCOL_HTTPS)
 		{
-			CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,"",ctp->oriUrl,ctp->refer,TypeHttps,RtmpTypeNone);
+			CConnMgrInterface::instance()->createConn(ctp->hash,
+				(char *)linUrl.addr.c_str(),
+				ctp->pullUrl,
+				"",
+				ctp->oriUrl,
+				ctp->refer,
+				TypeHttps,
+				RtmpTypeNone);
 		}
 	}
 	else
@@ -175,7 +232,23 @@ void CTaskMgr::pushCreateTask(CreateTaskPacket *ctp)
 	LinkUrl linUrl;
 	if (parseUrl(ctp->pushUrl,linUrl))
 	{
-		CConnMgrInterface::instance()->createConn((char *)linUrl.addr.c_str(),ctp->pullUrl,ctp->pushUrl,"",ctp->refer,TypeRtmp,RtmpClient2Publish);
+		string sAddr = CConfig::instance()->upperAddr()->getPush(hash2Idx(ctp->hash));
+		if (!sAddr.empty())
+		{
+			logs->debug("[CTaskMgr::pushCreateTask] create push task %s dial addr %s,is open udp %s.",
+				ctp->pushUrl.c_str(),
+				sAddr.c_str(),
+				CConfig::instance()->udpFlag()->isOpenUdpPush()?"true":"false");
+
+			CConnMgrInterface::instance()->createConn(ctp->hash,
+				sAddr.empty()?(char *)linUrl.addr.c_str():(char *)sAddr.c_str(),
+				ctp->pullUrl,
+				ctp->pushUrl,
+				"",
+				ctp->refer,
+				TypeRtmp,RtmpClient2Publish,
+				!CConfig::instance()->udpFlag()->isOpenUdpPush());
+		}
 	}
 	else
 	{

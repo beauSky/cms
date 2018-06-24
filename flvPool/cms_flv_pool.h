@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <core/cms_lock.h>
 #include <core/cms_thread.h>
 #include <strategy/cms_fast_bit_rate.h>
+#include <app/cms_app_info.h>
 #include <string>
 #include <vector>
 #include <map>
@@ -36,15 +37,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <set>
 #include <assert.h>
 
-#ifndef FLV_POOL_COUNT
-#define FLV_POOL_COUNT 8
-#endif
 
 Slice *newSlice();
 StreamSlice *newStreamSlice();
 
 void atomicInc(Slice *s);
 void atomicDec(Slice *s);
+
+class CAutoSlice
+{
+public:
+	CAutoSlice(Slice *s);
+	~CAutoSlice();
+
+private:
+	Slice * ms;
+};
 
 class CFlvPool
 {
@@ -63,8 +71,10 @@ public:
 	uint32 hashIdx(HASH &hash);
 	void push(uint32 i,Slice *s);
 	bool pop(uint32 i,Slice **s);
+	bool justJump2VideoLastXSecond(uint32 i, HASH &hash, uint32 &st, uint32 &ts, int64 &transIdx);
 	int  readRirstVideoAudioSlice(uint32 i,HASH &hash,Slice **s,bool isVideo);	
-	int  readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNum,bool isTrans = false );
+	int  readSlice(uint32 i,HASH &hash,int64 &llIdx,Slice **s,int &sliceNum,bool isTrans, int64 llMetaDataIdx, int64 llFirstVideoIdx, int64 llFirstAudioIdx,
+		bool &isExist, bool &isTaskRestart, bool isPublishTask, bool &isMetaDataChanged, bool &isFirstVideoAudioChanged, uint64 &transUid);
 	bool isHaveMetaData(uint32 i,HASH &hash);
 	bool isExist(uint32 i,HASH &hash);
 	bool isFirstVideoChange(uint32 i,HASH &hash,int64 &videoIdx);
@@ -88,7 +98,7 @@ public:
 	std::string readChangeBitRateSuffix(uint32 i,HASH &hash);
 	std::string readCodeSuffix(uint32 i,HASH &hash);
 
-	bool seekKeyFrame(uint32 i,HASH &hash,uint32 &tt,int64 &transIdx);
+	bool seekKeyFrame(uint32 i,HASH &hash,uint32 &st,int64 &transIdx);
 	bool mergeKeyFrame(char *desc,int descLen,char *key,int keyLen,char **src,int32 &srcLen,std::string url);
 	int64  getCacheTT(uint32 i,HASH &hash);
 	uint32 getKeyFrameDistance(uint32 i,HASH &hash);
@@ -108,15 +118,15 @@ private:
 	bool					misRun;
 	static CFlvPool			*minstance;
 
-	CLock					mqueueLock[FLV_POOL_COUNT];	
-	std::queue<Slice *>		mqueueSlice[FLV_POOL_COUNT];	
+	CLock					mqueueLock[APP_ALL_MODULE_THREAD_NUM];	
+	std::queue<Slice *>		mqueueSlice[APP_ALL_MODULE_THREAD_NUM];	
 
-	CRWlock					mhashSliceLock[FLV_POOL_COUNT];
-	std::map<HASH,StreamSlice *> mmapHashSlice[FLV_POOL_COUNT];
+	CRWlock					mhashSliceLock[APP_ALL_MODULE_THREAD_NUM];
+	std::map<HASH,StreamSlice *> mmapHashSlice[APP_ALL_MODULE_THREAD_NUM];
 
-	std::set<HASH>			msetHash[FLV_POOL_COUNT]; //超时记录，记录任务多久没访问就删除
-	CLock					msetHashLock[FLV_POOL_COUNT];
+	std::set<HASH>			msetHash[APP_ALL_MODULE_THREAD_NUM]; //超时记录，记录任务多久没访问就删除
+	CLock					msetHashLock[APP_ALL_MODULE_THREAD_NUM];
 
-	cms_thread_t			mtid[FLV_POOL_COUNT];
+	cms_thread_t			mtid[APP_ALL_MODULE_THREAD_NUM];
 };
 #endif

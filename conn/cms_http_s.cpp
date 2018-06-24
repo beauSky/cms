@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -32,9 +32,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <static/cms_static.h>
 #include <net/cms_net_mgr.h>
 #include <ts/cms_hls_mgr.h>
+#include <app/cms_app_info.h>
 #include <regex.h>
 
-std::string gCrossDomainRsp = "HTTP/1.1 200 OK\r\nServer: quick rtmp\r\nConnection: keep-alive\r\nContent-Length: 189\r\nContent-Type: text/xml\r\n\r\n<?xml version=\"1.0\"?><!DOCTYPE cross-domain-policy SYSTEM \"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd\"><cross-domain-policy><allow-access-from domain=\"*\" /></cross-domain-policy>";
+std::string gCrossDomainRsp = "HTTP/1.1 200 OK\r\nServer: quick rtmp\r\nConnection: keep-alive\r\nContent-Length: 189\r\nContent-Type: text/xml\r\r\n<?xml version=\"1.0\"?><!DOCTYPE cross-domain-policy SYSTEM \"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd\"><cross-domain-policy><allow-access-from domain=\"*\" /></cross-domain-policy>";
 
 CHttpServer::CHttpServer(CReaderWriter *rw,bool isTls)
 {
@@ -96,14 +97,20 @@ CHttpServer::~CHttpServer()
 		mremoteAddr.c_str());
 	if (mwatcherReadIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherReadIO);
+		if (mrw->netType() == NetTcp || (mrw->netType() == NetUdp && mrw->fd() > 0))//udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherReadIO);
+		}
 		freeCmsNetEv(mwatcherReadIO);
 		logs->debug("######### %s [CHttpServer::~CHttpServer] stop read io ",
 			mremoteAddr.c_str());
 	}
 	if (mwatcherWriteIO)
 	{
-		CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		if (mrw->netType() == NetTcp || (mrw->netType() == NetUdp && mrw->fd() > 0))//udp 不调用
+		{
+			CNetMgr::instance()->cneStop(mwatcherWriteIO);
+		}
 		freeCmsNetEv(mwatcherWriteIO);
 		logs->debug("######### %s [CHttpServer::~CHttpServer] stop write io ",
 			mremoteAddr.c_str());
@@ -117,7 +124,11 @@ CHttpServer::~CHttpServer()
 		delete mbinaryWriter;
 	}
 	mrw->close();
-	delete mrw;
+	if (mrw->netType() == NetTcp)//udp 不调用
+	{
+		//udp 连接由udp模块自身管理 不需要也不能由外部释放
+		delete mrw;
+	}
 }
 
 void CHttpServer::reset()
@@ -213,24 +224,42 @@ std::string CHttpServer::getRemoteIP()
 	return mremoteIP;
 }
 
-cms_net_ev *CHttpServer::evReadIO()
+cms_net_ev *CHttpServer::evReadIO(cms_net_ev *ev)
 {
 	if (mwatcherReadIO == NULL)
 	{
-		mwatcherReadIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
-		CNetMgr::instance()->cneStart(mwatcherReadIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherReadIO = ev;
+		}
+		else
+		{			
+			mwatcherReadIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherReadIO,readEV,mrw->fd(),EventRead);
+			CNetMgr::instance()->cneStart(mwatcherReadIO);
+		}
 	}
 	return mwatcherReadIO;
 }
 
-cms_net_ev *CHttpServer::evWriteIO()
+cms_net_ev *CHttpServer::evWriteIO(cms_net_ev *ev)
 {
 	if (mwatcherWriteIO == NULL)
 	{
-		mwatcherWriteIO = mallcoCmsNetEv();
-		initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
-		CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		if (ev != NULL)
+		{
+			//自定义的socket 不创建
+			atomicInc(ev);		//计数器加1
+			mwatcherWriteIO = ev;
+		}
+		else
+		{			
+			mwatcherWriteIO = mallcoCmsNetEv();
+			initCmsNetEv(mwatcherWriteIO,writeEV,mrw->fd(),EventWrite);
+			CNetMgr::instance()->cneStart(mwatcherWriteIO);
+		}
 	}
 	return mwatcherWriteIO;
 }
@@ -281,7 +310,7 @@ int CHttpServer::doDecode()
 			}
 			if (!(strConnect == HTTP_HEADER_UPGRADE && 
 				strUpgrade == HTTP_HEADER_WEBSOCKET &&
-				strSecWebSocketVersion == "13"))
+				strSecWebSocketVersion == HTTP_HEADER_WEBSOCKET_VERSION_NUM))
 			{
 				logs->debug("***** %s [CHttpServer::doDecode] %s websocket http header error *****",
 					mremoteAddr.c_str(),murl.c_str());
@@ -318,7 +347,7 @@ int CHttpServer::doDecode()
 				}
 			}
 			strHex = szCode;
-			msecWebSocketAccept = getBase64Encode(strHex); //base64 可能不是标准的
+			msecWebSocketAccept = getBase64Encode(strHex); //base64 标准的
 			misWebSocket = true;
 			mbinaryWriter = new BinaryWriter;
 		}		
@@ -355,6 +384,11 @@ int CHttpServer::handle()
 		{
 			break;
 		}
+		//默认播放http-flv
+		if (handleFlv(ret, true) != 0)
+		{
+			break;
+		}
 		logs->warn("***** %s [CHttpServer::handleFlv] http %s unknow request *****",
 			mremoteAddr.c_str(),murl.c_str());
 		ret = CMS_ERROR;
@@ -380,9 +414,9 @@ int CHttpServer::handleCrossDomain(int &ret)
 	return 0;
 }
 
-int	CHttpServer::handleFlv(int &ret)
+int	CHttpServer::handleFlv(int &ret, bool isDefault/* = false*/)
 {
-	if (murl.find(".flv") != string::npos)
+	if (murl.find(".flv") != string::npos || isDefault)
 	{
 		LinkUrl linkUrl;
 		if (!parseUrl(murl,linkUrl))
@@ -394,6 +428,13 @@ int	CHttpServer::handleFlv(int &ret)
 		}
 		if (isLegalIp(linkUrl.host.c_str()))
 		{
+			if (linkUrl.app.empty() || linkUrl.instanceName.empty())
+			{
+				logs->error("*** %s [CHttpServer::handleFlv] http 302 url %s app or instance name should be empty ***",
+					mremoteAddr.c_str(), murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
 			//302 地址
 			murl = "http://";
 			murl += linkUrl.app;
@@ -426,37 +467,60 @@ int	CHttpServer::handleFlv(int &ret)
 			{
 				mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SEC_WEBSOCKET_PROTOCOL,msecWebSocketProtocol);
 			}
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 		}
 		else
 		{
 			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"video/x-flv");
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CACHE_CONTROL,"no-cache");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_PRAGMA,"no-cache");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_ACCESS_CONTROL_ALLOW_ORIGIN,"*");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"close");
 		}
 		std::string strRspHeader = mhttp->httpResponse()->readResponse();
-		//flv header
-		strRspHeader.append(1,0x46);
-		strRspHeader.append(1,0x4C);
-		strRspHeader.append(1,0x56);
-		strRspHeader.append(1,0x01);
-		strRspHeader.append(1,0x05);
-		strRspHeader.append(1,0x00);
-		strRspHeader.append(1,0x00);
-		strRspHeader.append(1,0x00);
-		strRspHeader.append(1,0x09);
-		strRspHeader.append(1,0x00);
-		strRspHeader.append(1,0x00);
-		strRspHeader.append(1,0x00);
-		strRspHeader.append(1,0x00);
-		ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+		ret = writeRspHttpHeader(strRspHeader.c_str(), strRspHeader.length());
 		if (ret < 0)
 		{
 			logs->error("*** %s [CHttpServer::handleFlv] http %s send header fail ***",
+				mremoteAddr.c_str(), murl.c_str());
+			ret = CMS_ERROR;
+			return CMS_ERROR;
+		}
+		//flv header
+		std::string strFlvHeader;
+		strFlvHeader.append(1,0x46);
+		strFlvHeader.append(1,0x4C);
+		strFlvHeader.append(1,0x56);
+		strFlvHeader.append(1,0x01);
+
+		/*if (mhttp->httpRequest()->getHttpParam("only-audio") == "1")
+		{
+			strFlvHeader.append(1, 0x04);
+		}
+		else if (mhttp->httpRequest()->getHttpParam("only-video") == "1")
+		{
+			strFlvHeader.append(1, 0x01);
+		}
+		else 
+		{
+			strFlvHeader.append(1, 0x05);
+		}*/
+		strFlvHeader.append(1, 0x05);
+
+		strFlvHeader.append(1,0x00);
+		strFlvHeader.append(1,0x00);
+		strFlvHeader.append(1,0x00);
+		strFlvHeader.append(1,0x09);
+		strFlvHeader.append(1,0x00);
+		strFlvHeader.append(1,0x00);
+		strFlvHeader.append(1,0x00);
+		strFlvHeader.append(1,0x00);
+		ret = sendBefore(strFlvHeader.c_str(),strFlvHeader.length());
+		if (ret < 0)
+		{
+			logs->error("*** %s [CHttpServer::handleFlv] http %s send body fail ***",
 				mremoteAddr.c_str(),murl.c_str());
 			ret = CMS_ERROR;
 			return CMS_ERROR;
@@ -494,7 +558,7 @@ int CHttpServer::handleQuery(int &ret)
 			{
 				mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SEC_WEBSOCKET_PROTOCOL,msecWebSocketProtocol);
 			}
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"text/json; charset=UTF-8");
 		}
@@ -502,16 +566,23 @@ int CHttpServer::handleQuery(int &ret)
 		{
 			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"text/json; charset=UTF-8");
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"close");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
 		}
 		std::string strRspHeader = mhttp->httpResponse()->readResponse();
-		strRspHeader += strDump;
-		ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+		ret = writeRspHttpHeader(strRspHeader.c_str(), strRspHeader.length());
 		if (ret < 0)
 		{
-			logs->error("*** %s [CHttpServer::handleFlv] http %s send header fail ***",
+			logs->error("*** %s [CHttpServer::handleQuery] http %s send header fail ***",
+				mremoteAddr.c_str(), murl.c_str());
+			ret = CMS_ERROR;
+			return CMS_ERROR;
+		}
+		ret = sendBefore(strDump.c_str(), strDump.length());
+		if (ret < 0)
+		{
+			logs->error("*** %s [CHttpServer::handleQuery] http %s send body fail ***",
 				mremoteAddr.c_str(),murl.c_str());
 			ret = CMS_ERROR;
 			return CMS_ERROR;
@@ -582,16 +653,23 @@ int  CHttpServer::handleM3U8(int &ret)
 			snprintf(szLength,sizeof(szLength),"%lu",outData.length());
 			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"application/vnd.apple.mpegurl");
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
 
 			std::string strRspHeader = mhttp->httpResponse()->readResponse();
-			strRspHeader += outData;
-			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			ret = writeRspHttpHeader(strRspHeader.c_str(), strRspHeader.length());
 			if (ret < 0)
 			{
 				logs->error("*** %s [CHttpServer::handleM3U8] http %s send header fail ***",
+					mremoteAddr.c_str(), murl.c_str());
+				ret = CMS_ERROR;
+				return CMS_ERROR;
+			}
+			ret = sendBefore(outData.c_str(), outData.length());
+			if (ret < 0)
+			{
+				logs->error("*** %s [CHttpServer::handleM3U8] http %s send body fail ***",
 					mremoteAddr.c_str(),murl.c_str());
 				ret = CMS_ERROR;
 				return CMS_ERROR;
@@ -603,11 +681,11 @@ int  CHttpServer::handleM3U8(int &ret)
 			char szLength[20] = {0};
 			snprintf(szLength,sizeof(szLength),"%d",0);
 			mhttp->httpResponse()->setStatus(HTTP_CODE_404,"Not Found");
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
 			std::string strRspHeader = mhttp->httpResponse()->readResponse();
-			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			ret = writeRspHttpHeader(strRspHeader.c_str(),strRspHeader.length());
 			if (ret < 0)
 			{
 				logs->error("*** %s [CHttpServer::handleM3U8] http %s send header fail ***",
@@ -682,11 +760,11 @@ int  CHttpServer::handleTS(int &ret)
 				mremoteAddr.c_str(),murl.c_str(),ss->msliceLen);
 			mhttp->httpResponse()->setStatus(HTTP_CODE_200,"OK");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_TYPE,"video/mp2t");
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
 			std::string strRspHeader = mhttp->httpResponse()->readResponse();
-			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			ret = writeRspHttpHeader(strRspHeader.c_str(),strRspHeader.length());
 			if (ret < 0)
 			{
 				logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
@@ -738,11 +816,11 @@ int  CHttpServer::handleTS(int &ret)
 			char szLength[20] = {0};
 			snprintf(szLength,sizeof(szLength),"%d",0);
 			mhttp->httpResponse()->setStatus(HTTP_CODE_404,"Not Found");
-			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER,"cms server");
+			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_SERVER, APP_NAME);
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONNECTION,"keep-alive");
 			mhttp->httpResponse()->setHeader(HTTP_HEADER_RSP_CONTENT_LENGTH,szLength);
 			std::string strRspHeader = mhttp->httpResponse()->readResponse();
-			ret = sendBefore(strRspHeader.c_str(),strRspHeader.length());
+			ret = writeRspHttpHeader(strRspHeader.c_str(),strRspHeader.length());
 			if (ret < 0)
 			{
 				logs->error("*** %s [CHttpServer::handleTS] http %s send header fail ***",
@@ -777,6 +855,11 @@ int CHttpServer::doTransmission()
 		}
 	}
 	return ret;
+}
+
+int CHttpServer::writeRspHttpHeader(const char *data, int len)
+{
+	return mhttp->write(data, len);
 }
 
 int CHttpServer::sendBefore(const char *data,int len)
@@ -834,7 +917,6 @@ int CHttpServer::sendBefore(const char *data,int len)
 			return CMS_ERROR;
 		}
 		mbinaryWriter->reset();
-		return CMS_OK;
 	}
 	return mhttp->write(data,len);
 }
@@ -846,6 +928,11 @@ bool CHttpServer::isFinish()
 		return true;
 	}
 	return false;
+}
+
+bool CHttpServer::isWebsocket()
+{
+	return misWebSocket;
 }
 
 void CHttpServer::makeHash()
@@ -879,7 +966,7 @@ void CHttpServer::tryCreateTask()
 {
 	if (!CTaskMgr::instance()->pullTaskIsExist(mHash))
 	{
-		CTaskMgr::instance()->createTask(murl,"",murl,mreferer,CREATE_ACT_PULL,false,false);
+		CTaskMgr::instance()->createTask(mHash,murl,"",murl,mreferer,CREATE_ACT_PULL,false,false);
 	}
 }
 
@@ -887,6 +974,7 @@ void CHttpServer::down8upBytes()
 {
 	if (misFlvRequest)
 	{
+
 		unsigned long tt = getTickCount();
 		if (tt - mspeedTick > 1000)
 		{
@@ -919,4 +1007,9 @@ void CHttpServer::down8upBytes()
 			}
 		}
 	}
+}
+
+CReaderWriter *CHttpServer::rwConn()
+{
+	return mrw;
 }

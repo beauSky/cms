@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -38,6 +38,7 @@ CBufferReader::CBufferReader(CReaderWriter *rd,int size)
 	mrd = rd;
 	ms2nConn = NULL;
 	mtotalReadBytes = 0;
+	mkcpReadLen = 0;
 }
 
 CBufferReader::CBufferReader(s2n_connection *s2nConn,int size)
@@ -48,6 +49,7 @@ CBufferReader::CBufferReader(s2n_connection *s2nConn,int size)
 	mrd = NULL;
 	ms2nConn = s2nConn;
 	mtotalReadBytes = 0;
+	mkcpReadLen = 0;
 }
 
 CBufferReader::~CBufferReader()
@@ -59,7 +61,7 @@ CBufferReader::~CBufferReader()
 }
 
 int   CBufferReader::grow(int n)
-{
+{	
 	int outread = 0;
 	int nuseBuffer = me-mb;
 	/*if (nuseBuffer >= n)
@@ -101,6 +103,11 @@ int   CBufferReader::grow(int n)
 				logs->error("*** buffer reader read fail,errno=%d,errstr=%s ***",mrd->errnos(),mrd->errnoCode());
 				merrcode = mrd->errnos();
 				return CMS_ERROR;
+			}			
+			if (mrd->netType() == NetUdp)
+			{		
+				mkcpReadLen += nread;
+// 				logs->debug(" buffer reader  need read %d sock %d read len=%d,total read len=%d ***",needRead,mrd->fd(),nread, mkcpReadLen);
 			}
 		}
 		else if (mrd == NULL)
@@ -128,7 +135,7 @@ int   CBufferReader::grow(int n)
 		needRead -= nread;
 		me += nread;
 		outread += nread;
-		nread = 0;		
+		nread = 0;
 		break;
 	}
 	//尝试多读数据
@@ -287,7 +294,7 @@ int CBufferWriter::writeBytes(const char *data,int n)
 	const char *p = data;
 	int nuseBuffer = me-mb;
 	if (nuseBuffer > 0)
-	{
+	{		
 		//先把以前的数据发了
 		nwrite = 0;
 		if (ms2nConn == NULL)

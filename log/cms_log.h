@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -74,6 +74,7 @@ public:
 	string getFileName(char *szDTime);
 	void thread();
 	bool run(string dir,LogLevel level,bool console,int limitSize = 1024*1024*500);
+	void stop();
 	void debug(const char* fmt,...);
 	void info(const char* fmt,...);
 	void warn(const char* fmt,...);
@@ -83,5 +84,6 @@ public:
 
 CLog*	cmsLogInstance();
 void	cmsLogInit(string dir,LogLevel level,bool console,int limitSize = 1024*1024*500);
+void	cmsLogStop();
 
 #endif

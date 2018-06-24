@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -46,7 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifdef WIN32 /* WIN32 */
 #include <windows.h>
-#define cmsSleep(e) Sleep(e)
+#define cmsSleep(e) waitTime(e)
 #else /* posix */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -55,9 +55,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define _atoi64(val) strtoll(val, NULL, 10)
 #define str2float(val) strtod(val,NULL)
 #define hex2int64(val) strtoll(val, NULL, 16)
-#define cmsSleep(e) usleep(e*1000)
+#define cmsSleep(e) waitTime(e)
 #endif /* posix end */
 
+unsigned int hash2Idx(HASH &hash);
+std::string beforeHashUrl(std::string url);			//获取算hash字符串前预处理
+std::string beforeMajorHashUrl(std::string url);	//获取算hash字符串前预处理
 void getStrHash(char* input,int len,char* hash);
 void trueHash2FalseHash(unsigned char hash[20]);
 void falseHash2TrueHash(unsigned char hash[20]);
@@ -72,10 +75,13 @@ std::string getBase64Encode(std::string strUrl);
 unsigned long long ntohll(unsigned long long val);
 unsigned long long htonll(unsigned long long val);
 unsigned long getTickCount();
+unsigned long long getMilSeconds();
 int getTimeStr(char *dstBuf);
 void getDateTime(char* szDTime);
 long long getTimeUnix();
+long long getNsTime();
 int getTimeDay();
+void waitTime(int n);
 int cmsMkdir(const char *dirname);
 bool isLegalIp(const char * const szIp);
 unsigned long ipStr2ipInt(const char* szIP);
@@ -88,7 +94,8 @@ std::string trim(std::string &s,std::string &delim);
 HASH makeHash(const char *bytes,int len);
 std::string parseSpeed8Mem(int64 speed,bool isSpeed);
 bool nonblocking(int fd);
-
 void printTakeTime(std::map<unsigned long,unsigned long> &mapSendTakeTime,unsigned long ttB,unsigned long ttE,char *str,bool bPrint);
+unsigned long long getVid();
+long long MathAbs(long long value);
 
 #endif

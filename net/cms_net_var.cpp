@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓÐÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -61,4 +61,13 @@ void initCmsNetEv(cms_net_ev *cne,cms_net_cb callback,int fd,int event)
 	cne->mcallBack = callback;
 	cne->mfd = fd;
 	cne->mwatchEvent = event;
+}
+
+bool isUdpAddrEmpty(UdpAddr ua)
+{
+	if (ua.miBindPort == 0 && ua.miPort == 0 && ua.muiAddr == 0 && ua.mlistener == NULL)
+	{
+		return true;
+	}
+	return false;
 }

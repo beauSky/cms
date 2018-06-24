@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -42,7 +42,7 @@ class CFlvTransmission;
 class CConnRtmp:public Conn,public CStreamInfo
 {
 public:
-	CConnRtmp(RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std::string pushUrl);
+	CConnRtmp(HASH &hash,RtmpType rtmpType,CReaderWriter *rw,std::string pullUrl,std::string pushUrl);
 	~CConnRtmp();
 
 	int doit();
@@ -56,8 +56,10 @@ public:
 	int doTransmission();
 	int sendBefore(const char *data,int len){return 0;};
 	bool isFinish(){return false;};
+	bool isWebsocket() { return false;};
 	void reset(){};
 	void down8upBytes();
+	CReaderWriter *rwConn();
 
 	//stream info 接口
 	int		firstPlaySkipMilSecond();
@@ -71,8 +73,8 @@ public:
 	std::string getHost();
 	void    makeOneTask();
 
-	cms_net_ev    *evReadIO();
-	cms_net_ev    *evWriteIO();
+	cms_net_ev    *evReadIO(cms_net_ev *ev = NULL);
+	cms_net_ev    *evWriteIO(cms_net_ev *ev = NULL);
 	
 	void setUrl(std::string url);		//拉流或者被推流或者被播放的地址
 	void setPushUrl(std::string url);	//推流到其它服务的推流地址
@@ -81,7 +83,8 @@ public:
 	int  decodeSetDataFrame(amf0::Amf0Block *block);
 	int  setPublishTask();
 	int  setPlayTask();
-	void tryCreateTask();
+	void tryCreatePullTask();
+	void tryCreatePushTask(bool isRetry = false);
 private:
 	int  decodeVideo(RtmpMessage *msg,bool &isSave);
 	int  decodeAudio(RtmpMessage *msg,bool &isSave);
@@ -151,3 +154,4 @@ private:
 	bool			misCreateHls;
 };
 #endif
+

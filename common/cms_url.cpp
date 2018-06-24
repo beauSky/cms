@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: Ìì¿ÕÃ»ÓĞÎÚÔÆ/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -103,7 +103,7 @@ bool parseUrl(std::string url,LinkUrl &linkUrl)
 	{
 		logs->error("***** [parseUrl] %s parse fail can't find instance name string *****",url.c_str());
 		//return false;
-		linkUrl.addr = url.substr(begin);
+		linkUrl.app = url.substr(begin);
 	}else
 	{
 		linkUrl.app = url.substr(begin,end-begin);

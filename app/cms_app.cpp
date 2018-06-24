@@ -3,7 +3,7 @@ The MIT License (MIT)
 
 Copyright (c) 2017- cms(hsc)
 
-Author: hsc/kisslovecsh@foxmail.com
+Author: 天空没有乌云/kisslovecsh@foxmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -29,11 +29,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <dnscache/cms_dns_cache.h>
 #include <ts/cms_hls_mgr.h>
 #include <common/cms_shmmgr.h>
+#include <common/cms_url.h>
+#include <enc/cms_sha1.h>
 #include <app/cms_server.h>
 #include <flvPool/cms_flv_pool.h>
 #include <taskmgr/cms_task_mgr.h>
 #include <static/cms_static.h>
 #include <net/cms_net_mgr.h>
+#include <common/cms_time.h>
+#include <app/cms_app_info.h>
 #include <map>
 #include <string>
 #include <signal.h>
@@ -48,10 +52,13 @@ using namespace std;
 map<string,string> mapAgrv;
 #define ParamConfig		"-c"
 #define ParamDaemon		"-d"
+#define ParamTestServer "-t"
+#define ParamTestUrl	"-i"
+#define ParamTestNum	"-n"
 
 void sample(char *app)
 {
-	printf("##### useage: %s -d [debug/nodebug] -c config.json\n", app);
+	printf("##### useage: %s -d [debug/nodebug] -c config.json [-t true -n 1000 -i rtmp://test.cms.com/live/test]\n", app);
 }
 
 void inorgSignal()
@@ -155,10 +162,28 @@ string getVar(string key)
 
 void cycleServer()
 {
-	do 
+#ifdef just_test__CMS_APP_DEBUG_SP__
+	cmsSleep(100000);
+#else
+	do
 	{
 		cmsSleep(1000);
 	} while (1);
+#endif
+	cms_timer_udp_thread_stop();
+	cms_ev_timer_thread_stop();
+	CNetMgr::instance()->stop();
+	CStatic::instance()->stop();
+	CFlvPool::instance()->stop();
+	CMissionMgr::instance()->stop();
+	CConnMgrInterface::instance()->stop();
+	CTaskMgr::instance()->stop();
+#ifdef _CMS_APP_USE_TIME_
+	cmsTimeStop();
+#endif
+	//CServer::instance()->stop();
+	cmsSleep(1000);
+	cmsLogStop();	
 }
 
 void setRlimit()
@@ -174,6 +199,22 @@ void setRlimit()
 	logs->debug("+++ open file cur %d,open file max %d +++\n",rlim.rlim_cur,rlim.rlim_max);
 }
 
+void createTestTask()
+{
+	for (int i = 0; i < gcmsTestNum; i++)
+	{
+		char szNum[20] = { 0 };
+		snprintf(szNum, sizeof(szNum), "_%d", i);
+		string hashUrl = gcmsTestUrl + szNum;
+		printf(">>>>createTestTask hash url %s\n", hashUrl.c_str());
+		CSHA1 sha;
+		sha.write(hashUrl.c_str(), hashUrl.length());
+		string strHash = sha.read();
+		HASH hash = HASH((char *)strHash.c_str());
+		CTaskMgr::instance()->createTask(hash, gcmsTestUrl, "", gcmsTestUrl, "", CREATE_ACT_PULL, false, false);
+	}
+}
+
 int main(int argc,char *argv[])
 {	
 	if (argc % 2 != 1)
@@ -181,6 +222,10 @@ int main(int argc,char *argv[])
 		printf("***** main argc is error,should argc %% 2 == 1*****\n");
 		return 0;
 	}
+
+#ifdef _CMS_APP_USE_TIME_
+	cmsTimeRun();
+#endif
 	parseVar(argc-1,argv+1);
 	string config = getVar(ParamConfig);
 	if (config.empty())
@@ -193,6 +238,28 @@ int main(int argc,char *argv[])
 	{
 		daemon();
 	}	
+	string testServer = getVar(ParamTestServer);
+	if (testServer == "true")
+	{
+		gcmsTestUrl = getVar(ParamTestUrl);
+		if (gcmsTestUrl.empty())
+		{
+			printf("***** app as test server.but url is empty *****\n");
+			return 0;
+		}
+		string testNum =  getVar(ParamTestNum);
+		if (!testNum.empty())
+		{
+			gcmsTestNum = atoi(testNum.c_str());
+		}
+		if (gcmsTestNum <= 0)
+		{
+			gcmsTestNum = 100;
+		}		
+		gcmsTestServer = true;
+		printf("##### app as test server.url %s,make task num %d #####\n", gcmsTestUrl.c_str(), gcmsTestNum);
+	}
+
 	inorgSignal();	
 	if (!CConfig::instance()->init(config.c_str()))
 	{
@@ -244,6 +311,17 @@ int main(int argc,char *argv[])
 		logs->error("*** CServer::instance()->listenAll() fail ***");
 		cmsSleep(1000*3);
 		return 0;
+	}
+	//作为压测服务
+	if (gcmsTestServer)
+	{
+		LinkUrl linkUrl;
+		if (!parseUrl(gcmsTestUrl, linkUrl))
+		{
+			printf("***** app as test server.but url %s parse error *****\n", gcmsTestUrl.c_str());
+			return 0;
+		}
+		createTestTask();
 	}
 	cycleServer();
 	logs->debug("cms app exit.");
